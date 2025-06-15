@@ -5,24 +5,12 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { useProjectStore } from './stores/project'
-import { initTweeq, installTweeq } from './composables/useTweeq'
 
 const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
-
-// Initialize Tweeq
-initTweeq('com.stopmotion.collaborator', {
-  colorMode: 'light',
-  accentColor: '#667eea',
-  grayColor: '#9494B8',
-  backgroundColor: '#fcfcfc',
-})
-
-// Install Tweeq components
-installTweeq(app)
 
 // Initialize the project store and load any saved API key
 const projectStore = useProjectStore()
