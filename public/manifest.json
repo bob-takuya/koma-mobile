@@ -1,0 +1,31 @@
+{
+  "name": "StopMotion Collaborator",
+  "short_name": "StopMotion",
+  "description": "協働ストップモーションアニメーション制作アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#667eea",
+  "theme_color": "#667eea",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["productivity", "multimedia"],
+  "screenshots": [
+    {
+      "src": "/screenshots/camera-view.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ]
+}
