@@ -6,8 +6,8 @@ import { useProjectStore } from '../stores/project'
 const router = useRouter()
 const projectStore = useProjectStore()
 
-const frames = computed(() => projectStore.frames)
-const selectedFrames = ref<Set<string>>(new Set())
+const frames = computed(() => projectStore.config?.frames || [])
+const selectedFrames = ref<Set<number>>(new Set())
 const showDeleteConfirm = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')
 
@@ -26,16 +26,16 @@ const navigateToSetup = () => {
   router.push('/setup')
 }
 
-const toggleFrameSelection = (frameId: string) => {
-  if (selectedFrames.value.has(frameId)) {
-    selectedFrames.value.delete(frameId)
+const toggleFrameSelection = (frameNumber: number) => {
+  if (selectedFrames.value.has(frameNumber)) {
+    selectedFrames.value.delete(frameNumber)
   } else {
-    selectedFrames.value.add(frameId)
+    selectedFrames.value.add(frameNumber)
   }
 }
 
 const selectAllFrames = () => {
-  selectedFrames.value = new Set(frames.value.map((f) => f.id))
+  selectedFrames.value = new Set(frames.value.map((f) => f.frame))
 }
 
 const clearSelection = () => {
@@ -48,8 +48,9 @@ const deleteSelectedFrames = () => {
 }
 
 const confirmDelete = () => {
-  selectedFrames.value.forEach((frameId) => {
-    projectStore.deleteFrame(frameId)
+  selectedFrames.value.forEach((frameNumber) => {
+    // TODO: Implement frame deletion in project store
+    console.log('Delete frame:', frameNumber)
   })
   selectedFrames.value.clear()
   showDeleteConfirm.value = false
@@ -61,24 +62,6 @@ const cancelDelete = () => {
 
 const toggleViewMode = () => {
   viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
-}
-
-const formatDate = (timestamp: number) => {
-  return new Date(timestamp).toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-const formatFileSize = (bytes: number) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 </script>
 
@@ -212,18 +195,18 @@ const formatFileSize = (bytes: number) => {
       <div v-else-if="viewMode === 'grid'" class="frames-grid">
         <div
           v-for="frame in frames"
-          :key="frame.id"
+          :key="frame.frame"
           class="frame-item"
-          :class="{ selected: selectedFrames.has(frame.id) }"
-          @click="toggleFrameSelection(frame.id)"
+          :class="{ selected: selectedFrames.has(frame.frame) }"
+          @click="toggleFrameSelection(frame.frame)"
         >
           <div class="frame-image">
-            <img :src="frame.localUrl || frame.url" :alt="`Frame ${frame.sequence}`" />
+            <img :src="frame.filename || ''" :alt="`Frame ${frame.frame}`" />
             <div class="frame-overlay">
-              <div class="frame-sequence">{{ frame.sequence }}</div>
+              <div class="frame-sequence">{{ frame.frame }}</div>
               <div class="frame-checkbox">
                 <svg
-                  v-if="selectedFrames.has(frame.id)"
+                  v-if="selectedFrames.has(frame.frame)"
                   width="20"
                   height="20"
                   viewBox="0 0 24 24"
@@ -235,7 +218,7 @@ const formatFileSize = (bytes: number) => {
             </div>
           </div>
           <div class="frame-info">
-            <div class="frame-time">{{ formatDate(frame.timestamp) }}</div>
+            <div class="frame-time">フレーム {{ frame.frame }}</div>
           </div>
         </div>
       </div>
@@ -244,15 +227,15 @@ const formatFileSize = (bytes: number) => {
       <div v-else class="frames-list">
         <div
           v-for="frame in frames"
-          :key="frame.id"
+          :key="frame.frame"
           class="frame-row"
-          :class="{ selected: selectedFrames.has(frame.id) }"
-          @click="toggleFrameSelection(frame.id)"
+          :class="{ selected: selectedFrames.has(frame.frame) }"
+          @click="toggleFrameSelection(frame.frame)"
         >
           <div class="frame-checkbox-col">
             <div class="frame-checkbox">
               <svg
-                v-if="selectedFrames.has(frame.id)"
+                v-if="selectedFrames.has(frame.frame)"
                 width="20"
                 height="20"
                 viewBox="0 0 24 24"
@@ -263,13 +246,13 @@ const formatFileSize = (bytes: number) => {
             </div>
           </div>
           <div class="frame-thumbnail">
-            <img :src="frame.localUrl || frame.url" :alt="`Frame ${frame.sequence}`" />
+            <img :src="frame.filename || ''" :alt="`Frame ${frame.frame}`" />
           </div>
           <div class="frame-details">
-            <div class="frame-sequence-large">フレーム #{{ frame.sequence }}</div>
+            <div class="frame-sequence-large">フレーム #{{ frame.frame }}</div>
             <div class="frame-meta">
-              <span class="frame-time">{{ formatDate(frame.timestamp) }}</span>
-              <span class="frame-size">{{ formatFileSize(frame.size || 0) }}</span>
+              <span class="frame-time">{{ frame.taken ? '撮影済み' : '未撮影' }}</span>
+              <span class="frame-note">{{ frame.note || '' }}</span>
             </div>
           </div>
         </div>

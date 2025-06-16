@@ -18,28 +18,28 @@ vi.mock('vue-router', async () => {
 // Sample frame data for testing
 const sampleFrames: Frame[] = [
   {
-    id: '1',
-    sequence: 1,
-    url: 'https://example.com/frame1.jpg',
-    localUrl: 'blob:frame1',
-    timestamp: 1640995200000, // 2022-01-01 00:00:00
-    size: 1024000,
+    frame: 1,
+    taken: true,
+    filename: 'frame1.webp',
+    note: 'First frame',
   },
   {
-    id: '2',
-    sequence: 2,
-    url: 'https://example.com/frame2.jpg',
-    localUrl: 'blob:frame2',
-    timestamp: 1640995260000, // 2022-01-01 00:01:00
-    size: 1536000,
+    frame: 2,
+    taken: true,
+    filename: 'frame2.webp',
+    note: 'Second frame',
   },
 ]
 
 // Mock the project store
 const mockProjectStore = {
   hasApiKey: true,
-  frames: sampleFrames,
-  deleteFrame: vi.fn(),
+  config: {
+    totalFrames: 2,
+    fps: 12,
+    aspectRatio: 4/3,
+    frames: sampleFrames,
+  },
 }
 vi.mock('../stores/project', () => ({
   useProjectStore: () => mockProjectStore,
@@ -50,7 +50,7 @@ describe('GalleryView', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockProjectStore.frames = [...sampleFrames] // Reset frames
+    mockProjectStore.config.frames = [...sampleFrames] // Reset frames
     wrapper = mount(GalleryView)
   })
 
@@ -142,7 +142,7 @@ describe('GalleryView', () => {
   it('should select all frames when select all button is clicked', async () => {
     // Find the specific "全選択" button by text content
     const buttons = wrapper.findAll('.tool-button')
-    const selectAllButton = buttons.find((btn) => btn.text().includes('全選択'))
+    const selectAllButton = buttons.find((btn: any) => btn.text().includes('全選択'))
 
     if (selectAllButton) {
       await selectAllButton.trigger('click')
@@ -151,7 +151,7 @@ describe('GalleryView', () => {
       expect(wrapper.find('.frame-count').text()).toBe('2/2 選択中')
 
       const frameItems = wrapper.findAll('.frame-item')
-      frameItems.forEach((frame) => {
+      frameItems.forEach((frame: any) => {
         expect(frame.classes()).toContain('selected')
       })
     } else {
@@ -171,7 +171,7 @@ describe('GalleryView', () => {
     await wrapper.vm.$nextTick()
     const clearButton = wrapper
       .findAll('.tool-button')
-      .find((btn) => btn.text().includes('選択解除'))
+      .find((btn: any) => btn.text().includes('選択解除'))
 
     if (clearButton) {
       await clearButton.trigger('click')
@@ -186,7 +186,7 @@ describe('GalleryView', () => {
 
     // Find and click delete button
     await wrapper.vm.$nextTick()
-    const deleteButton = wrapper.findAll('.tool-button').find((btn) => btn.text().includes('削除'))
+    const deleteButton = wrapper.findAll('.tool-button').find((btn: any) => btn.text().includes('削除'))
 
     if (deleteButton) {
       await deleteButton.trigger('click')
@@ -202,7 +202,7 @@ describe('GalleryView', () => {
     await firstFrame.trigger('click')
 
     await wrapper.vm.$nextTick()
-    const deleteButton = wrapper.findAll('.tool-button').find((btn) => btn.text().includes('削除'))
+    const deleteButton = wrapper.findAll('.tool-button').find((btn: any) => btn.text().includes('削除'))
 
     if (deleteButton) {
       await deleteButton.trigger('click')
@@ -219,7 +219,7 @@ describe('GalleryView', () => {
 
   it('should show empty state when no frames exist', async () => {
     // Clear frames from mock store
-    mockProjectStore.frames = []
+    mockProjectStore.config.frames = []
 
     // Remount component
     wrapper.unmount()
@@ -232,7 +232,7 @@ describe('GalleryView', () => {
 
   it('should navigate to camera from empty state', async () => {
     // Clear frames from mock store
-    mockProjectStore.frames = []
+    mockProjectStore.config.frames = []
 
     // Remount component
     wrapper.unmount()
@@ -244,9 +244,9 @@ describe('GalleryView', () => {
     expect(mockPush).toHaveBeenCalledWith('/camera')
   })
 
-  it('should format dates correctly in Japanese locale', () => {
+  it('should display frame information correctly', () => {
     const frameInfo = wrapper.find('.frame-time')
-    expect(frameInfo.text()).toMatch(/\d{4}\/\d{2}\/\d{2}/)
+    expect(frameInfo.text()).toBe('フレーム 1')
   })
 
   it('should display frame sequence numbers', () => {

@@ -65,7 +65,7 @@ export class CameraService {
     try {
       if (!navigator.permissions) return false
 
-      const permission = await navigator.permissions.query({ name: 'camera' } as PermissionName)
+      const permission = await navigator.permissions.query({ name: 'camera' as any })
       return permission.state === 'granted'
     } catch {
       return false
