@@ -1,14 +1,8 @@
 <script setup lang="ts">
 import ApiKeySetup from '../components/ApiKeySetup.vue'
 import { useRouter } from 'vue-router'
-import { useProjectStore } from '../stores/project'
-import { computed } from 'vue'
 
 const router = useRouter()
-const projectStore = useProjectStore()
-
-// API キーが設定されたらカメラページに遷移
-const isApiKeySet = computed(() => projectStore.hasApiKey)
 
 const handleApiKeySet = () => {
   router.push('/camera')

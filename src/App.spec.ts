@@ -6,7 +6,7 @@ import App from './App.vue'
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual('vue-router')
   return {
-    ...(actual as any),
+    ...actual,
     RouterView: {
       name: 'RouterView',
       template: '<div data-testid="router-view">Router View</div>',

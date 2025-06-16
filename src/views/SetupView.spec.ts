@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createRouter, createWebHistory } from 'vue-router'
 import SetupView from './SetupView.vue'
-import ApiKeySetup from '../components/ApiKeySetup.vue'
 
 // Mock the router
 const mockPush = vi.fn()
@@ -99,8 +97,7 @@ describe('SetupView', () => {
     const setupView = wrapper.find('.setup-view')
     expect(setupView.classes()).toContain('setup-view')
 
-    // Check that mobile-specific classes are available
-    const style = setupView.element.style
+    // Check that mobile-specific element is available
     expect(setupView.element).toBeDefined()
   })
 

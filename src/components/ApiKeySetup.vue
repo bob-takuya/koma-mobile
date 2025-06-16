@@ -158,7 +158,6 @@ const handleSetup = async () => {
   if (!validateForm()) return
 
   isLoading.value = true
-  const setupError = error.value // Preserve validation error
   error.value = ''
 
   try {

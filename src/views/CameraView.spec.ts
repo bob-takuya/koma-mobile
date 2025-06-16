@@ -156,10 +156,7 @@ describe('CameraView', () => {
   it('should redirect to setup if no API key is available', () => {
     // This test simulates the onMounted behavior
     // The actual redirect logic is tested through the route guard
-    const mockStoreWithoutApiKey = {
-      hasApiKey: false,
-    }
-
+    
     // We can't easily test onMounted in this setup, but we can verify
     // that the component structure is correct for authenticated users
     expect(wrapper.find('.camera-view').exists()).toBe(true)

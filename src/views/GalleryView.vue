@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project'
-import type { Frame } from '../types'
 
 const router = useRouter()
 const projectStore = useProjectStore()

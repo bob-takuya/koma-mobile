@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { ProjectConfig, Frame } from '@/types'
+import type { ProjectConfig } from '@/types'
 
 export const useProjectStore = defineStore('project', () => {
   // State
