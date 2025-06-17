@@ -37,7 +37,7 @@ const mockProjectStore = {
   config: {
     totalFrames: 2,
     fps: 12,
-    aspectRatio: 4/3,
+    aspectRatio: 4 / 3,
     frames: sampleFrames,
   },
 }
@@ -186,7 +186,9 @@ describe('GalleryView', () => {
 
     // Find and click delete button
     await wrapper.vm.$nextTick()
-    const deleteButton = wrapper.findAll('.tool-button').find((btn: any) => btn.text().includes('削除'))
+    const deleteButton = wrapper
+      .findAll('.tool-button')
+      .find((btn: any) => btn.text().includes('削除'))
 
     if (deleteButton) {
       await deleteButton.trigger('click')
@@ -202,7 +204,9 @@ describe('GalleryView', () => {
     await firstFrame.trigger('click')
 
     await wrapper.vm.$nextTick()
-    const deleteButton = wrapper.findAll('.tool-button').find((btn: any) => btn.text().includes('削除'))
+    const deleteButton = wrapper
+      .findAll('.tool-button')
+      .find((btn: any) => btn.text().includes('削除'))
 
     if (deleteButton) {
       await deleteButton.trigger('click')

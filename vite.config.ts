@@ -8,7 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    vue(), 
+    vue(),
     vueDevTools(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -22,11 +22,11 @@ export default defineConfig({
               cacheName: 'api-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 5 // 5分
-              }
-            }
-          }
-        ]
+                maxAgeSeconds: 60 * 5, // 5分
+              },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'StopMotion Collaborator',
@@ -40,16 +40,15 @@ export default defineConfig({
           {
             src: 'favicon.ico',
             sizes: '64x64 32x32 24x24 16x16',
-            type: 'image/x-icon'
-          }
-        ]
-      }
-    })
+            type: 'image/x-icon',
+          },
+        ],
+      },
+    }),
   ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'tweeq': fileURLToPath(new URL('../koma/dev_modules/tweeq/src', import.meta.url)),
     },
   },
   server: {

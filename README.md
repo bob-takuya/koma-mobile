@@ -135,7 +135,7 @@ src/
 VITE_S3_REGION=your-region
 VITE_S3_BUCKET=your-bucket
 
-```
+````
 
 ### AWS S3 セットアップ
 
@@ -164,7 +164,7 @@ VITE_S3_BUCKET=your-bucket
     "MaxAgeSeconds": 3600
   }
 ]
-```
+````
 
 #### 3. IAM権限設定
 
@@ -176,18 +176,12 @@ VITE_S3_BUCKET=your-bucket
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ],
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::your-bucket-name/projects/*"
     },
     {
       "Effect": "Allow",
-      "Action": [
-        "s3:ListBucket"
-      ],
+      "Action": ["s3:ListBucket"],
       "Resource": "arn:aws:s3:::your-bucket-name",
       "Condition": {
         "StringLike": {
@@ -266,6 +260,7 @@ MIT License - 詳細はLICENSEファイルを参照
 ### GitHub Pages への自動デプロイ
 
 1. **リポジトリ設定**
+
    ```bash
    git add .
    git commit -m "Setup GitHub Pages deployment"
@@ -273,6 +268,7 @@ MIT License - 詳細はLICENSEファイルを参照
    ```
 
 2. **GitHub Pages 有効化**
+
    - リポジトリの Settings > Pages
    - Source を "GitHub Actions" に設定
 
@@ -303,30 +299,37 @@ aws cloudfront create-invalidation --distribution-id YOUR_DISTRIBUTION_ID --path
 ## 🐛 トラブルシューティング
 
 ### カメラアクセスの問題
+
 - **HTTPS必須**: カメラ権限にはHTTPS接続が必要
 - **権限確認**: ブラウザのカメラ権限を確認
 - **API対応**: MediaDevices API サポートを検証
 - **デバイス確認**: カメラデバイスが利用可能か確認
 
 ### S3接続の問題
+
 - **API認証情報**: アクセスキーとシークレットキーを確認
 - **CORS設定**: ブラウザのCORS制約を確認
 - **バケット権限**: IAMポリシーの設定を確認
 - **リージョン**: S3バケットのリージョン設定を確認
 
 ### GitHub Pages デプロイの問題
+
 - **ビルドエラー**: GitHub Actions のログを確認
 - **パス問題**: ベースURLの設定を確認
 - **権限問題**: GitHub Pages の設定を確認
 
 ### パフォーマンスの問題
+
 - **画像サイズ**: WebP圧縮品質を調整（現在0.8）
 - **キャッシュ**: ブラウザキャッシュをクリア
 - **ネットワーク**: 通信状況を確認
 
 ### メンバー間の協働問題
+
 - **フレーム分担**: 事前にフレーム担当を決定
 - **上書き競合**: 同じフレームの同時編集を避ける
 - **同期頻度**: 定期的な Sync 実行を推奨
+
+```
 
 ```

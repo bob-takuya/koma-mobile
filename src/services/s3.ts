@@ -63,11 +63,11 @@ export class S3Service {
     }
 
     const data = await response.json()
-    
+
     // キャッシュに保存
     this.configCache.set(cacheKey, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
 
     return data
@@ -114,11 +114,11 @@ export class S3Service {
     }
 
     const blob = await response.blob()
-    
+
     // キャッシュに保存
     this.imageCache.set(cacheKey, {
       blob,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
 
     return blob

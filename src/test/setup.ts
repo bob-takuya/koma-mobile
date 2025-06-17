@@ -20,7 +20,7 @@ const localStorageMock = {
   length: 0,
   key: vi.fn(),
 }
-global.localStorage = localStorageMock as any
+global.localStorage = localStorageMock as Storage
 
 // Mock fetch for S3 API calls
 global.fetch = vi.fn()
