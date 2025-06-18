@@ -141,7 +141,9 @@ describe('Project Store', () => {
       await store.loadConfig('test-project')
 
       expect(store.config).toBeNull()
-      expect(store.error).toBe('Failed to load project config. Please check your connection and try again.')
+      expect(store.error).toBe(
+        'Failed to load project config. Please check your connection and try again.',
+      )
       expect(store.debugError).toContain('Error details: Network error')
       expect(store.isLoading).toBe(false)
     })

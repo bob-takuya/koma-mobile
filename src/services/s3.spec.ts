@@ -77,8 +77,8 @@ describe('S3 Service', () => {
         expect.stringContaining(`projects/${mockProjectId}/config.json`),
         expect.objectContaining({
           method: 'GET',
-          mode: 'cors'
-        })
+          mode: 'cors',
+        }),
       )
     })
 
@@ -102,9 +102,7 @@ describe('S3 Service', () => {
         },
       })
 
-      await expect(s3Service.downloadConfig(mockProjectId)).rejects.toThrow(
-        'Project not found',
-      )
+      await expect(s3Service.downloadConfig(mockProjectId)).rejects.toThrow('Project not found')
     })
   })
 
@@ -125,8 +123,8 @@ describe('S3 Service', () => {
         expect.stringContaining(`projects/${mockProjectId}/config.json`),
         expect.objectContaining({
           method: 'HEAD',
-          mode: 'cors'
-        })
+          mode: 'cors',
+        }),
       )
     })
 
@@ -177,18 +175,20 @@ describe('S3 Service', () => {
         headers: {
           entries: () => [['content-type', 'image/webp']],
         },
-        blob: () => Promise.resolve(new Blob(['image-data']))
+        blob: () => Promise.resolve(new Blob(['image-data'])),
       })
 
       const result = await s3Service.downloadImage(mockProjectId, frameNumber)
 
       expect(result).toBeInstanceOf(Blob)
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining(`projects/${mockProjectId}/frame_${frameNumber.toString().padStart(4, '0')}.webp`),
+        expect.stringContaining(
+          `projects/${mockProjectId}/frame_${frameNumber.toString().padStart(4, '0')}.webp`,
+        ),
         expect.objectContaining({
           method: 'GET',
-          mode: 'cors'
-        })
+          mode: 'cors',
+        }),
       )
     })
 

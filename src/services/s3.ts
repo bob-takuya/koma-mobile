@@ -22,7 +22,7 @@ export class S3Service {
   constructor(bucketName: string, region: string = 'ap-northeast-1') {
     this.bucketName = bucketName
     this.region = region
-    
+
     // パブリックアクセス用のS3Client設定
     this.s3Client = new S3Client({
       region,
@@ -32,16 +32,16 @@ export class S3Service {
       useAccelerateEndpoint: false,
       maxAttempts: 3,
       requestHandler: {
-        requestTimeout: 30000
+        requestTimeout: 30000,
       },
       // 追加の匿名アクセス設定
       tls: true,
       apiVersion: '2006-03-01',
       // CORS設定
       useGlobalEndpoint: false,
-      disableHostPrefix: false
+      disableHostPrefix: false,
     })
-    
+
     // デバッグ用：認証情報の確認
     console.log('S3Client initialized for anonymous access:', {
       bucketName: this.bucketName,
@@ -49,23 +49,40 @@ export class S3Service {
       anonymousAccess: true,
       credentialsType: 'anonymous',
       userAgent: navigator.userAgent,
-      location: window.location.href
+      location: window.location.href,
     })
   }
 
   async uploadConfig(projectId: string, config: ProjectConfig): Promise<void> {
     const key = `projects/${projectId}/config.json`
+    const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
+
+    console.log('Uploading config via direct HTTP PUT:', { projectId, key, url })
 
     try {
-      const command = new PutObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-        Body: JSON.stringify(config),
-        ContentType: 'application/json',
+      const configJson = JSON.stringify(config, null, 2)
+      const response = await fetch(url, {
+        method: 'PUT',
+        body: configJson,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors',
       })
 
-      await this.s3Client.send(command)
+      console.log('Config upload response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      console.log('Config uploaded successfully via direct HTTP PUT')
     } catch (error) {
+      console.error('Failed to upload config via direct HTTP PUT:', error)
       throw new Error(`Failed to upload config: ${error}`)
     }
   }
@@ -89,15 +106,15 @@ export class S3Service {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
-        mode: 'cors'
+        mode: 'cors',
       })
 
       console.log('Direct HTTP response received:', {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers ? Object.fromEntries(response.headers.entries()) : {}
+        headers: response.headers ? Object.fromEntries(response.headers.entries()) : {},
       })
 
       if (!response.ok) {
@@ -120,12 +137,12 @@ export class S3Service {
       return data
     } catch (error: unknown) {
       console.error('S3 direct HTTP downloadConfig error:', error)
-      
+
       // プロジェクトが存在しない場合のエラーを特別に処理
       if (error instanceof Error && error.message === 'Project not found') {
         throw error
       }
-      
+
       // その他のエラー
       const errorMessage = error instanceof Error ? error.message : String(error)
       const enhancedError = new Error(`Failed to download config: ${errorMessage}`) as Error & {
@@ -134,7 +151,8 @@ export class S3Service {
         originalError: unknown
       }
       enhancedError.name = error instanceof Error ? error.name : 'HTTPError'
-      enhancedError.code = 'code' in (error as object) ? (error as { code: string }).code : 'UNKNOWN'
+      enhancedError.code =
+        'code' in (error as object) ? (error as { code: string }).code : 'UNKNOWN'
       enhancedError.originalError = error
       throw enhancedError
     }
@@ -148,21 +166,23 @@ export class S3Service {
     try {
       const response = await fetch(url, {
         method: 'HEAD',
-        mode: 'cors'
+        mode: 'cors',
       })
 
       console.log('Project exists check response:', {
         status: response.status,
-        statusText: response.statusText
+        statusText: response.statusText,
       })
 
       return response.status === 200
     } catch (error: unknown) {
       console.error('S3 direct HTTP checkProjectExists error:', error)
-      
+
       // ネットワークエラーの場合
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        const enhancedError = new Error('Network error - check your internet connection and S3 bucket CORS configuration') as Error & {
+        const enhancedError = new Error(
+          'Network error - check your internet connection and S3 bucket CORS configuration',
+        ) as Error & {
           name: string
           code: string
           originalError: unknown
@@ -172,16 +192,19 @@ export class S3Service {
         enhancedError.originalError = error
         throw enhancedError
       }
-      
+
       // その他のエラー
       const errorMessage = error instanceof Error ? error.message : String(error)
-      const enhancedError = new Error(`Failed to check project existence: ${errorMessage}`) as Error & {
+      const enhancedError = new Error(
+        `Failed to check project existence: ${errorMessage}`,
+      ) as Error & {
         name: string
         code: string
         originalError: unknown
       }
       enhancedError.name = error instanceof Error ? error.name : 'HTTPError'
-      enhancedError.code = 'code' in (error as object) ? (error as { code: string }).code : 'UNKNOWN'
+      enhancedError.code =
+        'code' in (error as object) ? (error as { code: string }).code : 'UNKNOWN'
       enhancedError.originalError = error
       throw enhancedError
     }
@@ -189,20 +212,33 @@ export class S3Service {
 
   async uploadImage(projectId: string, frameNumber: number, blob: Blob): Promise<void> {
     const key = `projects/${projectId}/${this.getFrameFilename(frameNumber)}`
+    const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
+
+    console.log('Uploading image via direct HTTP PUT:', { projectId, frameNumber, key, url, blobSize: blob.size })
 
     try {
-      const arrayBuffer = await blob.arrayBuffer()
-      const uint8Array = new Uint8Array(arrayBuffer)
-
-      const command = new PutObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-        Body: uint8Array,
-        ContentType: 'image/webp',
+      const response = await fetch(url, {
+        method: 'PUT',
+        body: blob,
+        headers: {
+          'Content-Type': 'image/webp',
+        },
+        mode: 'cors',
       })
 
-      await this.s3Client.send(command)
+      console.log('Upload response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      console.log('Image uploaded successfully via direct HTTP PUT')
     } catch (error) {
+      console.error('Failed to upload image via direct HTTP PUT:', error)
       throw new Error(`Failed to upload image: ${error}`)
     }
   }
@@ -223,7 +259,7 @@ export class S3Service {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        mode: 'cors'
+        mode: 'cors',
       })
 
       if (!response.ok) {

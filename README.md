@@ -11,13 +11,13 @@ npm run dev
 
 ## 使い方
 
-1. API KeyとProject IDを入力
+1. S3バケット名とProject IDを入力
 2. カメラで撮影
 3. S3に自動保存
 
-## テスト用バケット
+## セットアップ
 
-`koma-mobile-test-20250618-013942` (ap-northeast-1)
+詳細な設定方法については[SETUP_COMPLETE.md](SETUP_COMPLETE.md)を参照してください。
 
 ```
 

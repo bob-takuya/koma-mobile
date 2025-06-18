@@ -254,15 +254,34 @@ const captureFrame = async () => {
 }
 
 const enableOverwrite = () => {
+  console.log('enableOverwrite called:', {
+    currentFrame: currentFrame.value,
+    frameData: getCurrentFrameData.value,
+    showCamera: showCamera.value,
+  })
+
   showCamera.value = true
+  error.value = null // Clear any existing errors
+  
   nextTick(() => {
+    console.log('Initializing camera for overwrite...')
     initializeCamera()
   })
 }
 
 const downloadFrame = async () => {
   const frameData = getCurrentFrameData.value
-  if (!frameData?.taken || !frameData.filename) return
+  console.log('downloadFrame called:', {
+    frameData,
+    hasPendingUpload: !!pendingUploads.value.find((p) => p.frame === frameData?.frame),
+    bucketName: projectStore.bucketName,
+  })
+
+  if (!frameData?.taken || !frameData.filename) {
+    console.warn('Frame not taken or filename missing:', frameData)
+    error.value = 'Frame not available for download.'
+    return
+  }
 
   try {
     let blob: Blob
@@ -270,11 +289,18 @@ const downloadFrame = async () => {
     // Try to get from pending uploads first
     const pending = pendingUploads.value.find((p) => p.frame === frameData.frame)
     if (pending) {
+      console.log('Using blob from pending uploads')
       blob = pending.blob
     } else {
+      console.log('Downloading from S3...')
       // Download from S3
-      const s3Service = new S3Service(projectStore.bucketName!)
+      if (!projectStore.bucketName) {
+        throw new Error('Bucket name not configured')
+      }
+      
+      const s3Service = new S3Service(projectStore.bucketName)
       blob = await s3Service.downloadImage('current-project', frameData.frame)
+      console.log('Downloaded from S3:', { blobSize: blob.size, blobType: blob.type })
     }
 
     // Create download link
@@ -286,21 +312,56 @@ const downloadFrame = async () => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    
+    console.log('Download completed successfully')
   } catch (err) {
     console.error('Failed to download frame:', err)
-    error.value = 'Failed to download frame.'
+    
+    // より詳細なエラーメッセージを提供
+    if (err instanceof Error) {
+      if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
+        error.value = 'Network error. Please check your internet connection.'
+      } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+        error.value = 'Access denied. Please check bucket permissions.'
+      } else if (err.message.includes('404') || err.message.includes('Not Found')) {
+        error.value = 'Frame not found on server.'
+      } else {
+        error.value = `Download failed: ${err.message}`
+      }
+    } else {
+      error.value = 'Failed to download frame.'
+    }
   }
 }
 
 const syncFrames = async () => {
-  if (pendingUploads.value.length === 0 || !projectStore.bucketName) return
+  console.log('syncFrames called:', {
+    pendingUploadsCount: pendingUploads.value.length,
+    bucketName: projectStore.bucketName,
+    hasBucketName: !!projectStore.bucketName,
+  })
+
+  if (pendingUploads.value.length === 0) {
+    error.value = 'No frames to sync.'
+    return
+  }
+
+  if (!projectStore.bucketName) {
+    error.value = 'Bucket name not configured. Please check setup.'
+    return
+  }
 
   isSyncing.value = true
   error.value = null
 
   try {
+    console.log('Creating S3Service with bucket:', projectStore.bucketName)
     const s3Service = new S3Service(projectStore.bucketName)
+    
+    console.log('Syncing frames:', pendingUploads.value.map(p => ({ frame: p.frame, blobSize: p.blob.size })))
     const results = await s3Service.syncFrames('current-project', pendingUploads.value)
+    
+    console.log('Sync results:', results)
 
     // Remove successfully uploaded frames from pending
     const successfulFrames = results.filter((r) => r.success).map((r) => r.frame)
@@ -308,16 +369,36 @@ const syncFrames = async () => {
 
     // Update config on S3
     if (projectStore.config) {
+      console.log('Updating config on S3...')
       await s3Service.uploadConfig('current-project', projectStore.config)
+      console.log('Config updated successfully')
     }
 
     const failedCount = results.length - successfulFrames.length
     if (failedCount > 0) {
-      error.value = `${failedCount} frames failed to sync. Please try again.`
+      const failedFrames = results.filter(r => !r.success)
+      console.error('Failed frames:', failedFrames)
+      error.value = `${failedCount} frames failed to sync: ${failedFrames.map(f => `Frame ${f.frame}: ${f.error}`).join(', ')}`
+    } else {
+      console.log('All frames synced successfully!')
     }
   } catch (err) {
     console.error('Failed to sync frames:', err)
-    error.value = 'Failed to sync frames. Please check your connection.'
+    
+    // より詳細なエラーメッセージを提供
+    if (err instanceof Error) {
+      if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
+        error.value = 'Network connection error. Please check your internet connection.'
+      } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+        error.value = 'Access denied. Please check bucket permissions.'
+      } else if (err.message.includes('404') || err.message.includes('Not Found')) {
+        error.value = 'Bucket or project not found. Please check your setup.'
+      } else {
+        error.value = `Sync failed: ${err.message}`
+      }
+    } else {
+      error.value = 'Failed to sync frames. Please check your connection.'
+    }
   } finally {
     isSyncing.value = false
   }
@@ -375,10 +456,6 @@ onUnmounted(() => {
   position: relative;
   background: #000;
   overflow: hidden;
-}
-
-.landscape-layout {
-  orientation: landscape;
 }
 
 .preview-container {
@@ -458,6 +535,7 @@ onUnmounted(() => {
   border-radius: 3px;
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .frame-slider::-webkit-slider-thumb,

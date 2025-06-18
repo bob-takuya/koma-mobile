@@ -87,14 +87,14 @@ const handleSetup = async () => {
   try {
     projectStore.setBucketName(bucketName.value.trim())
     await projectStore.loadConfig(projectId.value.trim())
-    
+
     // プロジェクトストアのエラーをチェック
     if (projectStore.error) {
       error.value = projectStore.error
       projectStore.clearBucketName()
       return
     }
-    
+
     // 成功した場合
     emit('setup-complete', projectId.value.trim())
   } catch (err) {
@@ -232,7 +232,7 @@ projectStore.loadBucketName()
   cursor: pointer;
 }
 
-.debug-toggle input[type="checkbox"] {
+.debug-toggle input[type='checkbox'] {
   width: auto;
   margin: 0;
   padding: 0;

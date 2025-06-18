@@ -12,11 +12,11 @@ class S3DirectService {
   constructor(bucketName: string, region: string = 'ap-northeast-1') {
     this.bucketName = bucketName
     this.region = region
-    
+
     console.log('S3DirectService initialized for anonymous access:', {
       bucketName: this.bucketName,
       region: this.region,
-      method: 'direct-http'
+      method: 'direct-http',
     })
   }
 
@@ -33,14 +33,14 @@ class S3DirectService {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
-        mode: 'cors'
+        mode: 'cors',
       })
 
       console.log('Direct HTTP response received:', {
         status: response.status,
-        statusText: response.statusText
+        statusText: response.statusText,
       })
 
       if (!response.ok) {
@@ -69,12 +69,12 @@ class S3DirectService {
     try {
       const response = await fetch(url, {
         method: 'HEAD',
-        mode: 'cors'
+        mode: 'cors',
       })
 
       console.log('Project exists check response:', {
         status: response.status,
-        statusText: response.statusText
+        statusText: response.statusText,
       })
 
       return response.status === 200
@@ -167,7 +167,7 @@ export const useProjectStore = defineStore('project', () => {
 
     try {
       const s3Service = new S3DirectService(bucketName.value)
-      
+
       // まずプロジェクトの存在をチェック
       const projectExists = await s3Service.checkProjectExists(projectId)
       if (!projectExists) {
@@ -181,25 +181,25 @@ export const useProjectStore = defineStore('project', () => {
       config.value = data
     } catch (err: unknown) {
       console.error('Failed to load config:', err)
-      
+
       // デバッグ情報を保存
-      const errorObj = err as Error & { 
+      const errorObj = err as Error & {
         code?: string
         $metadata?: unknown
         originalError?: unknown
       }
-      
+
       const errorDetails = {
         message: errorObj.message || 'Unknown error',
         name: errorObj.name || 'Unknown',
         code: errorObj.code || 'None',
         stack: errorObj.stack || 'No stack trace',
         metadata: errorObj.$metadata || 'No metadata',
-        originalError: errorObj.originalError || 'No original error'
+        originalError: errorObj.originalError || 'No original error',
       }
-      
+
       debugError.value = `Error details: ${errorDetails.message}\nError name: ${errorDetails.name}\nError code: ${errorDetails.code}\nMetadata: ${JSON.stringify(errorDetails.metadata, null, 2)}\nStack: ${errorDetails.stack}`
-      
+
       if (errorObj.message === 'Project not found') {
         error.value = 'Project not found. Please check the project ID.'
       } else if (errorObj.name === 'CORSError' || errorObj.code === 'CORS_OR_NETWORK') {
@@ -208,7 +208,10 @@ export const useProjectStore = defineStore('project', () => {
         error.value = 'S3 bucket not found. Please check the bucket name.'
       } else if (errorObj.name === 'AccessDenied' || errorObj.code === 'AccessDenied') {
         error.value = 'Access denied. Please check your AWS credentials and bucket permissions.'
-      } else if (errorObj.name === 'CredentialsError' || errorObj.message?.includes('credentials')) {
+      } else if (
+        errorObj.name === 'CredentialsError' ||
+        errorObj.message?.includes('credentials')
+      ) {
         error.value = 'AWS credentials not found or invalid. Please configure your AWS credentials.'
       } else if (errorObj.name === 'NetworkError' || errorObj.message?.includes('network')) {
         error.value = 'Network error. Please check your internet connection.'
