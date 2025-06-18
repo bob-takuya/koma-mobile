@@ -2,29 +2,39 @@
   <div v-if="showOrientationWarning" class="orientation-popup-overlay" @click="dismissWarning">
     <div class="orientation-popup" @click.stop>
       <div class="orientation-icon">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-          <line x1="8" y1="21" x2="16" y2="21"/>
-          <line x1="12" y1="17" x2="12" y2="21"/>
+        <svg
+          width="64"
+          height="64"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
         </svg>
         <div class="rotation-arrows">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 2v6h-6"/>
-            <path d="M21 8l-5-5a8 8 0 0 0-11.31 0L3 5"/>
-            <path d="M3 16v6h6"/>
-            <path d="M3 16l5 5a8 8 0 0 0 11.31 0L21 19"/>
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21 2v6h-6" />
+            <path d="M21 8l-5-5a8 8 0 0 0-11.31 0L3 5" />
+            <path d="M3 16v6h6" />
+            <path d="M3 16l5 5a8 8 0 0 0 11.31 0L21 19" />
           </svg>
         </div>
       </div>
-      
+
       <h3 class="popup-title">画面を横向きにしてください</h3>
-      <p class="popup-message">
-        最適な撮影体験のために、デバイスを横向きに回転させてください。
-      </p>
-      
-      <button class="popup-button" @click="dismissWarning">
-        継続する
-      </button>
+      <p class="popup-message">最適な撮影体験のために、デバイスを横向きに回転させてください。</p>
+
+      <button class="popup-button" @click="dismissWarning">継続する</button>
     </div>
   </div>
 </template>
@@ -126,7 +136,8 @@ const { showOrientationWarning, dismissWarning } = useOrientationCheck()
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -142,11 +153,11 @@ const { showOrientationWarning, dismissWarning } = useOrientationCheck()
     padding: 1.5rem;
     margin: 1rem;
   }
-  
+
   .popup-title {
     font-size: 1.25rem;
   }
-  
+
   .popup-message {
     font-size: 0.9rem;
   }

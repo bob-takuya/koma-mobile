@@ -59,7 +59,7 @@ export const useProjectStore = defineStore('project', () => {
   function markFrameTaken(frameNumber: number, filename: string) {
     if (!config.value) return
 
-    const frame = config.value.frames.find((f) => f.frame === frameNumber)
+    const frame = config.value.frames.find((f) => f.number === frameNumber)
     if (frame) {
       frame.taken = true
       frame.filename = filename

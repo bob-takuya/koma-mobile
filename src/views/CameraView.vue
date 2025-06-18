@@ -37,48 +37,47 @@ const navigateToSetup = () => {
 
 <template>
   <div class="camera-view">
-    <header class="header">
-      <div class="header-content">
-        <button class="nav-button settings-button" @click="navigateToSetup" aria-label="設定に戻る">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
-          </svg>
-        </button>
+    <!-- 全画面カメラインターフェース -->
+    <CameraInterface @error="handleError" />
 
-        <h1 class="title">カメラ撮影</h1>
+    <!-- 浮遊する設定ボタン（左上） -->
+    <button
+      class="floating-nav-button settings-button"
+      @click="navigateToSetup"
+      aria-label="設定に戻る"
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
+      </svg>
+    </button>
 
-        <button
-          class="nav-button gallery-button"
-          @click="navigateToGallery"
-          aria-label="ギャラリーを開く"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21,15 16,10 5,21" />
-          </svg>
-        </button>
-      </div>
-    </header>
-
-    <main class="main-content">
-      <CameraInterface @error="handleError" />
-    </main>
+    <!-- 浮遊するギャラリーボタン（右上） -->
+    <button
+      class="floating-nav-button gallery-button"
+      @click="navigateToGallery"
+      aria-label="ギャラリーを開く"
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21,15 16,10 5,21" />
+      </svg>
+    </button>
 
     <!-- エラーオーバーレイ -->
     <div v-if="showError" class="error-overlay" @click="dismissError">
@@ -95,61 +94,49 @@ const navigateToSetup = () => {
 .camera-view {
   min-height: 100vh;
   background: #000;
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
   position: relative;
-  z-index: 10;
+  overflow: hidden;
 }
 
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem;
-  max-width: 100%;
-}
-
-.nav-button {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
+/* 浮遊するナビゲーションボタン */
+.floating-nav-button {
+  position: absolute;
+  top: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-.nav-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.05);
+.floating-nav-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.1);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.4);
 }
 
-.nav-button:active {
+.floating-nav-button:active {
   transform: scale(0.95);
 }
 
-.title {
-  color: white;
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  text-align: center;
-  flex: 1;
+/* 設定ボタンの位置（左上） */
+.settings-button {
+  left: 1rem;
 }
 
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+/* ギャラリーボタンの位置（右上） */
+.gallery-button {
+  right: 1rem;
 }
 
 .error-overlay {
@@ -205,17 +192,18 @@ const navigateToSetup = () => {
 
 /* モバイル対応 */
 @media (max-width: 768px) {
-  .header-content {
-    padding: 0.75rem;
+  .floating-nav-button {
+    width: 52px;
+    height: 52px;
+    top: 0.75rem;
   }
 
-  .nav-button {
-    width: 44px;
-    height: 44px;
+  .settings-button {
+    left: 0.75rem;
   }
 
-  .title {
-    font-size: 1.1rem;
+  .gallery-button {
+    right: 0.75rem;
   }
 
   .error-dialog {
@@ -224,19 +212,35 @@ const navigateToSetup = () => {
   }
 }
 
+/* セーフエリア対応（iPhone等のノッチ対応） */
+@media (max-width: 768px) {
+  .floating-nav-button {
+    top: max(0.75rem, env(safe-area-inset-top));
+  }
+
+  .settings-button {
+    left: max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .gallery-button {
+    right: max(0.75rem, env(safe-area-inset-right));
+  }
+}
+
 /* 横向き対応 */
 @media (orientation: landscape) and (max-height: 600px) {
-  .header-content {
-    padding: 0.5rem;
+  .floating-nav-button {
+    width: 48px;
+    height: 48px;
+    top: 0.5rem;
   }
 
-  .nav-button {
-    width: 40px;
-    height: 40px;
+  .settings-button {
+    left: 0.5rem;
   }
 
-  .title {
-    font-size: 1rem;
+  .gallery-button {
+    right: 0.5rem;
   }
 }
 </style>

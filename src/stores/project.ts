@@ -176,11 +176,24 @@ export const useProjectStore = defineStore('project', () => {
   function markFrameTaken(frameNumber: number, filename: string) {
     if (!config.value) return
 
-    const frame = config.value.frames.find((f) => f.frame === frameNumber)
+    const frame = config.value.frames.find((f) => f.number === frameNumber)
     if (frame) {
       frame.taken = true
       frame.filename = filename
     }
+  }
+
+  function deleteFrames(frameNumbers: number[]) {
+    if (!config.value) return
+
+    frameNumbers.forEach((frameNumber) => {
+      const frame = config.value!.frames.find((f) => f.number === frameNumber)
+      if (frame) {
+        frame.taken = false
+        frame.filename = null
+        // notesは保持する（削除されても元のメモは残す）
+      }
+    })
   }
 
   async function loadConfig(projectId: string) {
@@ -300,6 +313,7 @@ export const useProjectStore = defineStore('project', () => {
     clearProjectId,
     setCurrentFrame,
     markFrameTaken,
+    deleteFrames,
     loadConfig,
     saveConfig,
   }

@@ -318,6 +318,55 @@ export class S3Service {
     }
   }
 
+  async deleteImage(projectId: string, frameNumber: number): Promise<void> {
+    const key = `projects/${projectId}/${this.getFrameFilename(frameNumber)}`
+    const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
+
+    console.log('Deleting image via direct HTTP DELETE:', { projectId, frameNumber, key, url })
+
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        mode: 'cors',
+      })
+
+      console.log('Delete response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      })
+
+      // 204 No Content は削除成功を示す
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // キャッシュからも削除
+      this.clearImageCache(projectId, frameNumber)
+
+      console.log('Image deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete image:', error)
+      // 削除に失敗してもキャッシュはクリアする
+      this.clearImageCache(projectId, frameNumber)
+      throw new Error(`Failed to delete image: ${error}`)
+    }
+  }
+
+  async deleteImages(projectId: string, frameNumbers: number[]): Promise<void> {
+    console.log('Deleting multiple images:', { projectId, frameNumbers })
+
+    const deletePromises = frameNumbers.map((frameNumber) =>
+      this.deleteImage(projectId, frameNumber).catch((error) => {
+        console.warn(`Failed to delete frame ${frameNumber}:`, error)
+        return null // 個別の削除エラーは警告として処理
+      }),
+    )
+
+    await Promise.all(deletePromises)
+    console.log('Bulk image deletion completed')
+  }
+
   async syncFrames(projectId: string, frames: FrameToSync[]): Promise<SyncResult[]> {
     console.log(`🔄 Starting sync for ${frames.length} frames:`, {
       projectId,

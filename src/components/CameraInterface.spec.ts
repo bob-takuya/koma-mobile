@@ -22,9 +22,9 @@ describe('CameraInterface Component', () => {
       fps: 12,
       aspectRatio: 16 / 9,
       frames: [
-        { frame: 0, taken: false, filename: null, note: 'Start frame' },
-        { frame: 1, taken: true, filename: 'frame_0001.webp', note: 'Second frame' },
-        { frame: 2, taken: false, filename: null, note: null },
+        { number: 0, taken: false, filename: null, notes: 'Start frame' },
+        { number: 1, taken: true, filename: 'frame_0001.webp', notes: 'Second frame' },
+        { number: 2, taken: false, filename: null, notes: '' },
       ],
     }
     store.currentFrame = 0

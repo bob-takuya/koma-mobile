@@ -39,7 +39,7 @@ describe('S3 Service', () => {
         totalFrames: 24,
         fps: 12,
         aspectRatio: 16 / 9,
-        frames: [{ frame: 0, taken: false, filename: null, note: 'Start' }],
+        frames: [{ number: 0, taken: false, filename: null, notes: 'Start' }],
       }
 
       // Mock successful fetch response for PUT request

@@ -1,9 +1,9 @@
 // StopMotionCollaborator types
 export interface Frame {
-  frame: number
+  number: number
   taken: boolean
   filename: string | null
-  note: string | null
+  notes: string
 }
 
 export interface ProjectConfig {

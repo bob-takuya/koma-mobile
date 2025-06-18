@@ -7,10 +7,10 @@ export function useOrientationCheck() {
   const checkOrientation = () => {
     const width = window.innerWidth
     const height = window.innerHeight
-    
+
     // 縦向きかどうかを判定
     isPortrait.value = height > width
-    
+
     // モバイルデバイスで縦向きの場合、警告を表示
     if (isPortrait.value && (width < 768 || height < 480)) {
       showOrientationWarning.value = true
@@ -42,6 +42,6 @@ export function useOrientationCheck() {
   return {
     isPortrait,
     showOrientationWarning,
-    dismissWarning
+    dismissWarning,
   }
 }

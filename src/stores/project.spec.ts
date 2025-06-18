@@ -110,8 +110,8 @@ describe('Project Store', () => {
         fps: 12,
         aspectRatio: 16 / 9,
         frames: [
-          { frame: 0, taken: false, filename: null, note: 'Start' },
-          { frame: 1, taken: true, filename: 'frame_001.webp', note: null },
+          { number: 0, taken: false, filename: null, notes: 'Start' },
+          { number: 1, taken: true, filename: 'frame_001.webp', notes: '' },
         ],
       }
 
@@ -207,10 +207,10 @@ describe('Project Store', () => {
         fps: 12,
         aspectRatio: 16 / 9,
         frames: new Array(10).fill(null).map((_, i) => ({
-          frame: i,
+          number: i,
           taken: false,
           filename: null,
-          note: null,
+          notes: '',
         })),
       }
 
@@ -226,18 +226,18 @@ describe('Project Store', () => {
 
     it('should get current frame data', () => {
       const store = useProjectStore()
-      const frameData: Frame = { frame: 2, taken: true, filename: 'frame_002.webp', note: 'Test' }
+      const frameData: Frame = { number: 2, taken: true, filename: 'frame_002.webp', notes: 'Test' }
 
       store.config = {
         totalFrames: 5,
         fps: 12,
         aspectRatio: 16 / 9,
         frames: [
-          { frame: 0, taken: false, filename: null, note: null },
-          { frame: 1, taken: false, filename: null, note: null },
+          { number: 0, taken: false, filename: null, notes: '' },
+          { number: 1, taken: false, filename: null, notes: '' },
           frameData,
-          { frame: 3, taken: false, filename: null, note: null },
-          { frame: 4, taken: false, filename: null, note: null },
+          { number: 3, taken: false, filename: null, notes: '' },
+          { number: 4, taken: false, filename: null, notes: '' },
         ],
       }
       store.currentFrame = 2
@@ -254,16 +254,16 @@ describe('Project Store', () => {
         fps: 12,
         aspectRatio: 16 / 9,
         frames: [
-          { frame: 0, taken: false, filename: null, note: null },
-          { frame: 1, taken: false, filename: null, note: null },
-          { frame: 2, taken: false, filename: null, note: null },
+          { number: 0, taken: false, filename: null, notes: '' },
+          { number: 1, taken: false, filename: null, notes: '' },
+          { number: 2, taken: false, filename: null, notes: '' },
         ],
       }
 
       store.markFrameTaken(1, 'frame_001.webp')
 
-      expect(store.config.frames[1].taken).toBe(true)
-      expect(store.config.frames[1].filename).toBe('frame_001.webp')
+      expect(store.config!.frames[1].taken).toBe(true)
+      expect(store.config!.frames[1].filename).toBe('frame_001.webp')
     })
 
     it('should get taken frames count', () => {
@@ -273,11 +273,11 @@ describe('Project Store', () => {
         fps: 12,
         aspectRatio: 16 / 9,
         frames: [
-          { frame: 0, taken: true, filename: 'frame_000.webp', note: null },
-          { frame: 1, taken: false, filename: null, note: null },
-          { frame: 2, taken: true, filename: 'frame_002.webp', note: null },
-          { frame: 3, taken: false, filename: null, note: null },
-          { frame: 4, taken: true, filename: 'frame_004.webp', note: null },
+          { number: 0, taken: true, filename: 'frame_000.webp', notes: '' },
+          { number: 1, taken: false, filename: null, notes: '' },
+          { number: 2, taken: true, filename: 'frame_002.webp', notes: '' },
+          { number: 3, taken: false, filename: null, notes: '' },
+          { number: 4, taken: true, filename: 'frame_004.webp', notes: '' },
         ],
       }
 

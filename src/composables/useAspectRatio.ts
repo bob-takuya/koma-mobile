@@ -51,7 +51,7 @@ export function useAspectRatio() {
     window.addEventListener('orientationchange', () => {
       setTimeout(updateSize, 100)
     })
-    
+
     // 初期サイズを計算
     setTimeout(updateSize, 50)
   })
@@ -64,6 +64,6 @@ export function useAspectRatio() {
     containerRef,
     aspectRatio: projectAspectRatio,
     optimalSize,
-    updateSize
+    updateSize,
   }
 }

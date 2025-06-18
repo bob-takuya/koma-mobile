@@ -51,15 +51,13 @@ describe('CameraView', () => {
 
   it('should render the camera view correctly', () => {
     expect(wrapper.find('.camera-view').exists()).toBe(true)
-    expect(wrapper.find('.title').text()).toBe('カメラ撮影')
+    // Title has been removed for full-screen camera design
   })
 
-  it('should render the header with navigation buttons', () => {
-    const header = wrapper.find('.header')
-    expect(header.exists()).toBe(true)
-
-    const settingsButton = wrapper.find('.settings-button')
-    const galleryButton = wrapper.find('.gallery-button')
+  it('should render floating navigation buttons', () => {
+    // Header has been replaced with floating buttons
+    const settingsButton = wrapper.find('.floating-nav-button.settings-button')
+    const galleryButton = wrapper.find('.floating-nav-button.gallery-button')
 
     expect(settingsButton.exists()).toBe(true)
     expect(galleryButton.exists()).toBe(true)
@@ -70,14 +68,14 @@ describe('CameraView', () => {
   })
 
   it('should navigate to setup when settings button is clicked', async () => {
-    const settingsButton = wrapper.find('.settings-button')
+    const settingsButton = wrapper.find('.floating-nav-button.settings-button')
     await settingsButton.trigger('click')
 
     expect(mockPush).toHaveBeenCalledWith('/setup')
   })
 
   it('should navigate to gallery when gallery button is clicked', async () => {
-    const galleryButton = wrapper.find('.gallery-button')
+    const galleryButton = wrapper.find('.floating-nav-button.gallery-button')
     await galleryButton.trigger('click')
 
     expect(mockPush).toHaveBeenCalledWith('/gallery')
@@ -131,20 +129,23 @@ describe('CameraView', () => {
   })
 
   it('should have proper aria labels for accessibility', () => {
-    const settingsButton = wrapper.find('.settings-button')
-    const galleryButton = wrapper.find('.gallery-button')
+    const settingsButton = wrapper.find('.floating-nav-button.settings-button')
+    const galleryButton = wrapper.find('.floating-nav-button.gallery-button')
 
     expect(settingsButton.attributes('aria-label')).toBe('設定に戻る')
     expect(galleryButton.attributes('aria-label')).toBe('ギャラリーを開く')
   })
 
-  it('should have proper header layout with title centered', () => {
-    const headerContent = wrapper.find('.header-content')
-    expect(headerContent.exists()).toBe(true)
+  it('should have proper full-screen layout', () => {
+    // Header and title removed for full-screen camera design
+    const cameraView = wrapper.find('.camera-view')
+    expect(cameraView.exists()).toBe(true)
 
-    const title = wrapper.find('.title')
-    expect(title.exists()).toBe(true)
-    expect(title.text()).toBe('カメラ撮影')
+    // Check that floating buttons exist
+    const settingsButton = wrapper.find('.floating-nav-button.settings-button')
+    const galleryButton = wrapper.find('.floating-nav-button.gallery-button')
+    expect(settingsButton.exists()).toBe(true)
+    expect(galleryButton.exists()).toBe(true)
   })
 
   it('should have black background for camera view', () => {

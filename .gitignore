@@ -49,5 +49,16 @@ workbox-*.js.map
 
 # Backup and old files
 *.backup
+
+# Development scripts and test files
+scripts/
+test-configs/
+test-html/
+
+# AWS credentials
+.aws/
+
+# Local development files
+*.local.*
 *-old-*.ts
 *-old.ts

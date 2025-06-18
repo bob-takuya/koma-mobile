@@ -25,24 +25,32 @@ onMounted(() => {
 })
 
 // フレームデータが変更された時に画像を再読み込み
-watch(frames, () => {
-  loadTakenFrameImages()
-}, { deep: true })
+watch(
+  frames,
+  () => {
+    loadTakenFrameImages()
+  },
+  { deep: true },
+)
 
 const loadTakenFrameImages = async () => {
   if (!projectStore.bucketName || !projectStore.projectId) return
 
-  const takenFrames = frames.value.filter(frame => frame.taken && frame.filename)
-  
+  const takenFrames = frames.value.filter((frame) => frame.taken && frame.filename)
+
   for (const frame of takenFrames) {
-    if (!frameImageCache.value.has(frame.frame) && !loadingImages.value.has(frame.frame)) {
-      loadFrameImage(frame.frame)
+    if (!frameImageCache.value.has(frame.number) && !loadingImages.value.has(frame.number)) {
+      loadFrameImage(frame.number)
     }
   }
 }
 
 const loadFrameImage = async (frameNumber: number) => {
-  if (!projectStore.bucketName || !projectStore.projectId || frameImageCache.value.has(frameNumber)) {
+  if (
+    !projectStore.bucketName ||
+    !projectStore.projectId ||
+    frameImageCache.value.has(frameNumber)
+  ) {
     return
   }
 
@@ -62,7 +70,7 @@ const loadFrameImage = async (frameNumber: number) => {
 
 const getFrameImageUrl = (frame: any): string | undefined => {
   if (!frame.taken) return undefined
-  return frameImageCache.value.get(frame.frame) || undefined
+  return frameImageCache.value.get(frame.number) || undefined
 }
 
 const isImageLoading = (frameNumber: number) => {
@@ -84,36 +92,98 @@ const navigateToSetup = () => {
 }
 
 const toggleFrameSelection = (frameNumber: number) => {
+  console.log('toggleFrameSelection called with frameNumber:', frameNumber)
+  console.log('Before toggle, selectedFrames has:', Array.from(selectedFrames.value))
   if (selectedFrames.value.has(frameNumber)) {
     selectedFrames.value.delete(frameNumber)
+    console.log('Removed frame', frameNumber, 'from selection')
   } else {
     selectedFrames.value.add(frameNumber)
+    console.log('Added frame', frameNumber, 'to selection')
   }
+  console.log('After toggle, selectedFrames has:', Array.from(selectedFrames.value))
 }
 
 const selectAllFrames = () => {
-  selectedFrames.value = new Set(frames.value.map((f) => f.frame))
+  console.log('selectAllFrames called')
+  selectedFrames.value = new Set(frames.value.map((f) => f.number))
+  console.log('All frames selected:', Array.from(selectedFrames.value))
 }
 
 const clearSelection = () => {
+  console.log('clearSelection called')
   selectedFrames.value.clear()
+  console.log('Selection cleared, selectedFrames.size:', selectedFrames.value.size)
 }
 
 const deleteSelectedFrames = () => {
+  console.log('deleteSelectedFrames called, selectedFrames.size:', selectedFrames.value.size)
   if (selectedFrames.value.size === 0) return
+  console.log('Setting showDeleteConfirm to true')
   showDeleteConfirm.value = true
+  console.log('showDeleteConfirm.value:', showDeleteConfirm.value)
 }
 
-const confirmDelete = () => {
-  selectedFrames.value.forEach((frameNumber) => {
-    // TODO: Implement frame deletion in project store
-    console.log('Delete frame:', frameNumber)
-  })
-  selectedFrames.value.clear()
-  showDeleteConfirm.value = false
+const confirmDelete = async () => {
+  console.log('confirmDelete called, selectedFrames.size:', selectedFrames.value.size)
+  if (selectedFrames.value.size === 0) return
+
+  try {
+    // フレームを削除（未撮影状態にリセット）
+    const frameNumbers = Array.from(selectedFrames.value)
+
+    // 削除前に撮影済みフレームを特定
+    const takenFramesToDelete = frameNumbers.filter((frameNumber) => {
+      const frame = frames.value.find((f) => f.number === frameNumber)
+      return frame && frame.taken && frame.filename
+    })
+
+    // フレーム状態をリセット
+    projectStore.deleteFrames(frameNumbers)
+
+    // 削除されたフレームのキャッシュをクリア
+    frameNumbers.forEach((frameNumber) => {
+      const cachedUrl = frameImageCache.value.get(frameNumber)
+      if (cachedUrl) {
+        URL.revokeObjectURL(cachedUrl)
+        frameImageCache.value.delete(frameNumber)
+      }
+    })
+
+    // S3の設定を更新
+    if (projectStore.bucketName && projectStore.projectId && projectStore.config) {
+      console.log('Updating project config after frame deletion...')
+      const s3Service = new S3Service(projectStore.bucketName)
+
+      // 設定を更新
+      await s3Service.uploadConfig(projectStore.projectId, projectStore.config)
+      console.log('Project config updated successfully')
+
+      // 撮影済みだったフレームの画像をS3から削除
+      if (takenFramesToDelete.length > 0) {
+        console.log('Deleting images from S3:', takenFramesToDelete)
+        try {
+          await s3Service.deleteImages(projectStore.projectId, takenFramesToDelete)
+          console.log('Images deleted from S3 successfully')
+        } catch (imageDeleteError) {
+          console.warn('Failed to delete some images from S3:', imageDeleteError)
+          // 画像削除エラーは警告として処理（設定更新は成功している）
+        }
+      }
+    }
+
+    console.log('Frames deleted successfully:', frameNumbers)
+  } catch (err) {
+    console.error('Failed to delete frames:', err)
+    // エラーが発生しても UI は閉じる（ローカルの状態は既に更新済み）
+  } finally {
+    selectedFrames.value.clear()
+    showDeleteConfirm.value = false
+  }
 }
 
 const cancelDelete = () => {
+  console.log('cancelDelete called')
   showDeleteConfirm.value = false
 }
 
@@ -264,12 +334,11 @@ onUnmounted(() => {
       <div v-else-if="viewMode === 'grid'" class="frames-grid">
         <div
           v-for="frame in frames"
-          :key="frame.frame"
+          :key="frame.number"
           class="frame-item"
-          :class="{ selected: selectedFrames.has(frame.frame) }"
-          @click="navigateToFrame(frame.frame)"
+          :class="{ selected: selectedFrames.has(frame.number) }"
         >
-          <div class="frame-image">
+          <div class="frame-image" @click="navigateToFrame(frame.number)">
             <div v-if="!frame.taken" class="frame-placeholder">
               <svg
                 width="48"
@@ -279,19 +348,21 @@ onUnmounted(() => {
                 stroke="currentColor"
                 stroke-width="1"
               >
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
+                <path
+                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                />
+                <circle cx="12" cy="13" r="4" />
               </svg>
               <span>未撮影</span>
             </div>
-            <div v-else-if="isImageLoading(frame.frame)" class="frame-loading">
+            <div v-else-if="isImageLoading(frame.number)" class="frame-loading">
               <div class="loading-spinner"></div>
               <span>読み込み中...</span>
             </div>
-            <img 
-              v-else-if="getFrameImageUrl(frame)" 
-              :src="getFrameImageUrl(frame)" 
-              :alt="`Frame ${frame.frame}`"
+            <img
+              v-else-if="getFrameImageUrl(frame)"
+              :src="getFrameImageUrl(frame)"
+              :alt="`Frame ${frame.number}`"
               class="frame-img"
             />
             <div v-else class="frame-error">
@@ -303,17 +374,17 @@ onUnmounted(() => {
                 stroke="currentColor"
                 stroke-width="1"
               >
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="15" y1="9" x2="9" y2="15"/>
-                <line x1="9" y1="9" x2="15" y2="15"/>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
               </svg>
               <span>読み込みエラー</span>
             </div>
             <div class="frame-overlay">
-              <div class="frame-sequence">{{ frame.frame + 1 }}</div>
-              <div class="frame-checkbox" @click.stop="toggleFrameSelection(frame.frame)">
+              <div class="frame-sequence">{{ frame.number + 1 }}</div>
+              <div class="frame-checkbox" @click.stop="toggleFrameSelection(frame.number)">
                 <svg
-                  v-if="selectedFrames.has(frame.frame)"
+                  v-if="selectedFrames.has(frame.number)"
                   width="20"
                   height="20"
                   viewBox="0 0 24 24"
@@ -325,7 +396,7 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="frame-info">
-            <div class="frame-time">フレーム {{ frame.frame + 1 }}</div>
+            <div class="frame-time">フレーム {{ frame.number + 1 }}</div>
             <div class="frame-status" :class="{ taken: frame.taken }">
               {{ frame.taken ? '撮影済み' : '未撮影' }}
             </div>
@@ -337,15 +408,15 @@ onUnmounted(() => {
       <div v-else class="frames-list">
         <div
           v-for="frame in frames"
-          :key="frame.frame"
+          :key="frame.number"
           class="frame-row"
-          :class="{ selected: selectedFrames.has(frame.frame) }"
-          @click="navigateToFrame(frame.frame)"
+          :class="{ selected: selectedFrames.has(frame.number) }"
+          @click="navigateToFrame(frame.number)"
         >
-          <div class="frame-checkbox-col" @click.stop="toggleFrameSelection(frame.frame)">
+          <div class="frame-checkbox-col" @click.stop="toggleFrameSelection(frame.number)">
             <div class="frame-checkbox">
               <svg
-                v-if="selectedFrames.has(frame.frame)"
+                v-if="selectedFrames.has(frame.number)"
                 width="20"
                 height="20"
                 viewBox="0 0 24 24"
@@ -365,17 +436,19 @@ onUnmounted(() => {
                 stroke="currentColor"
                 stroke-width="1"
               >
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
+                <path
+                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                />
+                <circle cx="12" cy="13" r="4" />
               </svg>
             </div>
-            <div v-else-if="isImageLoading(frame.frame)" class="thumbnail-loading">
+            <div v-else-if="isImageLoading(frame.number)" class="thumbnail-loading">
               <div class="loading-spinner-small"></div>
             </div>
-            <img 
-              v-else-if="getFrameImageUrl(frame)" 
-              :src="getFrameImageUrl(frame)" 
-              :alt="`Frame ${frame.frame}`"
+            <img
+              v-else-if="getFrameImageUrl(frame)"
+              :src="getFrameImageUrl(frame)"
+              :alt="`Frame ${frame.number}`"
               class="thumbnail-img"
             />
             <div v-else class="thumbnail-error">
@@ -387,19 +460,19 @@ onUnmounted(() => {
                 stroke="currentColor"
                 stroke-width="1"
               >
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="15" y1="9" x2="9" y2="15"/>
-                <line x1="9" y1="9" x2="15" y2="15"/>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
               </svg>
             </div>
           </div>
           <div class="frame-details">
-            <div class="frame-sequence-large">フレーム #{{ frame.frame + 1 }}</div>
+            <div class="frame-sequence-large">フレーム #{{ frame.number + 1 }}</div>
             <div class="frame-meta">
               <span class="frame-time" :class="{ taken: frame.taken }">
                 {{ frame.taken ? '撮影済み' : '未撮影' }}
               </span>
-              <span v-if="frame.note" class="frame-note">{{ frame.note }}</span>
+              <span v-if="frame.notes" class="frame-note">{{ frame.notes }}</span>
             </div>
           </div>
         </div>
@@ -411,8 +484,9 @@ onUnmounted(() => {
       <div class="delete-dialog" @click.stop>
         <h3 class="delete-title">フレームを削除</h3>
         <p class="delete-message">
-          選択した {{ selectedFrames.size }} 個のフレームを削除しますか？<br />
-          この操作は取り消せません。
+          選択した {{ selectedFrames.size }} 個のフレームを未撮影状態に戻します。<br />
+          撮影済みの画像データはS3から削除され、この操作は取り消せません。<br />
+          フレームのメモは保持されます。
         </p>
         <div class="delete-actions">
           <button class="cancel-button" @click="cancelDelete">キャンセル</button>
@@ -606,6 +680,12 @@ onUnmounted(() => {
   position: relative;
   aspect-ratio: 4/3;
   overflow: hidden;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.frame-image:hover {
+  opacity: 0.8;
 }
 
 .frame-img {
@@ -657,8 +737,12 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .frame-overlay {
@@ -866,6 +950,81 @@ onUnmounted(() => {
   font-size: 0.75rem;
   color: #6c757d;
   font-style: italic;
+}
+
+/* 削除確認ダイアログ */
+.delete-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.delete-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.delete-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.delete-message {
+  color: #495057;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.delete-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.cancel-button,
+.confirm-button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  min-width: 100px;
+}
+
+.cancel-button {
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
+}
+
+.cancel-button:hover {
+  background: #e9ecef;
+}
+
+.confirm-button {
+  background: #dc3545;
+  color: white;
+}
+
+.confirm-button:hover {
+  background: #c82333;
 }
 
 /* モバイル対応 */

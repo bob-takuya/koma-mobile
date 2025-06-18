@@ -18,16 +18,16 @@ vi.mock('vue-router', async () => {
 // Sample frame data for testing
 const sampleFrames: Frame[] = [
   {
-    frame: 1,
+    number: 1,
     taken: true,
     filename: 'frame1.webp',
-    note: 'First frame',
+    notes: 'First frame',
   },
   {
-    frame: 2,
+    number: 2,
     taken: true,
     filename: 'frame2.webp',
-    note: 'Second frame',
+    notes: 'Second frame',
   },
 ]
 
