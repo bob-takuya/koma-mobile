@@ -2,14 +2,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { S3Service } from '@/services/s3'
 import type { ProjectConfig } from '@/types'
 
+// Mock fetch API
+const mockFetch = vi.fn()
+global.fetch = mockFetch
+
 // Mock the AWS SDK
 vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: vi.fn().mockImplementation(() => ({
     send: vi.fn(),
   })),
-  GetObjectCommand: vi.fn(),
   PutObjectCommand: vi.fn(),
-  HeadObjectCommand: vi.fn(),
 }))
 
 describe('S3 Service', () => {
@@ -20,6 +22,7 @@ describe('S3 Service', () => {
   beforeEach(() => {
     s3Service = new S3Service(mockBucketName)
     vi.clearAllMocks()
+    mockFetch.mockClear()
   })
 
   describe('Constructor', () => {
@@ -57,26 +60,31 @@ describe('S3 Service', () => {
         frames: [],
       }
 
-      const mockS3Client = {
-        send: vi.fn().mockResolvedValue({
-          Body: {
-            transformToString: () => JSON.stringify(mockConfig),
-          },
-        }),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock successful fetch response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          entries: () => [['content-type', 'application/json']],
+        },
+        text: () => Promise.resolve(JSON.stringify(mockConfig)),
+      })
 
       const result = await s3Service.downloadConfig(mockProjectId)
 
       expect(result).toEqual(mockConfig)
-      expect(mockS3Client.send).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(`projects/${mockProjectId}/config.json`),
+        expect.objectContaining({
+          method: 'GET',
+          mode: 'cors'
+        })
+      )
     })
 
     it('should handle config download errors', async () => {
-      const mockS3Client = {
-        send: vi.fn().mockRejectedValue(new Error('S3 error')),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock fetch failure
+      mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
       await expect(s3Service.downloadConfig(mockProjectId)).rejects.toThrow(
         'Failed to download config',
@@ -84,10 +92,15 @@ describe('S3 Service', () => {
     })
 
     it('should handle project not found error', async () => {
-      const mockS3Client = {
-        send: vi.fn().mockRejectedValue({ name: 'NoSuchKey' }),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock 404 response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: {
+          entries: () => [['content-type', 'application/json']],
+        },
+      })
 
       await expect(s3Service.downloadConfig(mockProjectId)).rejects.toThrow(
         'Project not found',
@@ -97,31 +110,43 @@ describe('S3 Service', () => {
 
   describe('Project Existence Check', () => {
     it('should return true if project exists', async () => {
-      const mockS3Client = {
-        send: vi.fn().mockResolvedValue({}),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock successful HEAD response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          entries: () => [['content-length', '1024']],
+        },
+      })
 
       const exists = await s3Service.checkProjectExists(mockProjectId)
       expect(exists).toBe(true)
-      expect(mockS3Client.send).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(`projects/${mockProjectId}/config.json`),
+        expect.objectContaining({
+          method: 'HEAD',
+          mode: 'cors'
+        })
+      )
     })
 
     it('should return false if project does not exist', async () => {
-      const mockS3Client = {
-        send: vi.fn().mockRejectedValue({ name: 'NoSuchKey' }),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock 404 response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: {
+          entries: () => [],
+        },
+      })
 
       const exists = await s3Service.checkProjectExists(mockProjectId)
       expect(exists).toBe(false)
     })
 
     it('should throw error for other S3 errors', async () => {
-      const mockS3Client = {
-        send: vi.fn().mockRejectedValue(new Error('Access denied')),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock network error
+      mockFetch.mockRejectedValueOnce(new Error('Access denied'))
 
       await expect(s3Service.checkProjectExists(mockProjectId)).rejects.toThrow('Access denied')
     })
@@ -143,22 +168,28 @@ describe('S3 Service', () => {
     })
 
     it('should download image from S3', async () => {
-      const mockArrayBuffer = new ArrayBuffer(10)
       const frameNumber = 3
 
-      const mockS3Client = {
-        send: vi.fn().mockResolvedValue({
-          Body: {
-            transformToByteArray: () => mockArrayBuffer,
-          },
-        }),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock successful fetch response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          entries: () => [['content-type', 'image/webp']],
+        },
+        blob: () => Promise.resolve(new Blob(['image-data']))
+      })
 
       const result = await s3Service.downloadImage(mockProjectId, frameNumber)
 
       expect(result).toBeInstanceOf(Blob)
-      expect(mockS3Client.send).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(`projects/${mockProjectId}/frame_${frameNumber.toString().padStart(4, '0')}.webp`),
+        expect.objectContaining({
+          method: 'GET',
+          mode: 'cors'
+        })
+      )
     })
 
     it('should handle image upload errors', async () => {

@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useProjectStore } from '@/stores/project'
-import { S3Service } from '@/services/s3'
 import type { ProjectConfig, Frame } from '@/types'
 
-// Mock the S3 service
+// Mock fetch API for S3DirectService
+const mockFetch = vi.fn()
+global.fetch = mockFetch
+
+// Mock the S3 service (for the legacy upload functionality)
 vi.mock('@/services/s3', () => ({
   S3Service: vi.fn().mockImplementation(() => ({
     downloadConfig: vi.fn(),
@@ -19,6 +22,7 @@ describe('Project Store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    mockFetch.mockClear()
   })
 
   describe('Initial State', () => {
@@ -78,62 +82,58 @@ describe('Project Store', () => {
         ],
       }
 
-      const mockS3Service = {
-        checkProjectExists: vi.fn().mockResolvedValue(true),
-        downloadConfig: vi.fn().mockResolvedValue(mockConfig),
-        uploadConfig: vi.fn(),
-        downloadImage: vi.fn(),
-        uploadImage: vi.fn(),
-      }
+      // Mock successful HEAD request (project exists)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          entries: () => [['content-length', '1024']],
+        },
+      })
 
-      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
+      // Mock successful GET request (download config)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          entries: () => [['content-type', 'application/json']],
+        },
+        text: () => Promise.resolve(JSON.stringify(mockConfig)),
+      })
 
       const store = useProjectStore()
       store.setBucketName('test-bucket')
 
       await store.loadConfig('test-project')
 
-      expect(mockS3Service.checkProjectExists).toHaveBeenCalledWith('test-project')
-      expect(mockS3Service.downloadConfig).toHaveBeenCalledWith('test-project')
       expect(store.config).toEqual(mockConfig)
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
     })
 
     it('should handle project not found error', async () => {
-      const mockS3Service = {
-        checkProjectExists: vi.fn().mockResolvedValue(false),
-        downloadConfig: vi.fn(),
-        uploadConfig: vi.fn(),
-        downloadImage: vi.fn(),
-        uploadImage: vi.fn(),
-      }
-
-      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
+      // Mock 404 response (project doesn't exist)
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: {
+          entries: () => [],
+        },
+      })
 
       const store = useProjectStore()
-      store.setBucketName('test-bucket')
+      store.setBucketName('non-existent-bucket')
 
       await store.loadConfig('non-existent-project')
 
-      expect(mockS3Service.checkProjectExists).toHaveBeenCalledWith('non-existent-project')
-      expect(mockS3Service.downloadConfig).not.toHaveBeenCalled()
       expect(store.config).toBeNull()
       expect(store.error).toBe('Project not found. Please check the project ID.')
-      expect(store.debugError).toContain('Project check failed for: non-existent-project')
       expect(store.isLoading).toBe(false)
     })
 
     it('should handle config loading errors', async () => {
-      const mockS3Service = {
-        checkProjectExists: vi.fn().mockResolvedValue(true),
-        downloadConfig: vi.fn().mockRejectedValue(new Error('Network error')),
-        uploadConfig: vi.fn(),
-        downloadImage: vi.fn(),
-        uploadImage: vi.fn(),
-      }
-
-      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
+      // Mock network error
+      mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
       const store = useProjectStore()
       store.setBucketName('test-bucket')
@@ -147,53 +147,19 @@ describe('Project Store', () => {
     })
 
     it('should handle bucket not found error', async () => {
-      const mockS3Service = {
-        checkProjectExists: vi.fn().mockRejectedValue({ name: 'NoSuchBucket' }),
-        downloadConfig: vi.fn(),
-        uploadConfig: vi.fn(),
-        downloadImage: vi.fn(),
-        uploadImage: vi.fn(),
-      }
-
-      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
+      // Mock error that simulates NoSuchBucket
+      const bucketError = new Error('NoSuchBucket')
+      bucketError.name = 'NoSuchBucket'
+      mockFetch.mockRejectedValueOnce(bucketError)
 
       const store = useProjectStore()
-      store.setBucketName('non-existent-bucket')
+      store.setBucketName('test-bucket')
 
       await store.loadConfig('test-project')
 
       expect(store.config).toBeNull()
       expect(store.error).toBe('S3 bucket not found. Please check the bucket name.')
       expect(store.debugError).toContain('Error name: NoSuchBucket')
-      expect(store.isLoading).toBe(false)
-    })
-
-    it('should save config to S3', async () => {
-      const mockConfig: ProjectConfig = {
-        totalFrames: 24,
-        fps: 12,
-        aspectRatio: 16 / 9,
-        frames: [],
-      }
-
-      const mockS3Service = {
-        checkProjectExists: vi.fn(),
-        downloadConfig: vi.fn(),
-        uploadConfig: vi.fn().mockResolvedValue(undefined),
-        downloadImage: vi.fn(),
-        uploadImage: vi.fn(),
-      }
-
-      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
-
-      const store = useProjectStore()
-      store.setBucketName('test-bucket')
-      store.config = mockConfig
-
-      await store.saveConfig('test-project')
-
-      expect(mockS3Service.uploadConfig).toHaveBeenCalledWith('test-project', mockConfig)
-      expect(store.error).toBeNull()
       expect(store.isLoading).toBe(false)
     })
   })

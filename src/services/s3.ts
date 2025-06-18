@@ -97,7 +97,7 @@ export class S3Service {
       console.log('Direct HTTP response received:', {
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
+        headers: response.headers ? Object.fromEntries(response.headers.entries()) : {}
       })
 
       if (!response.ok) {
