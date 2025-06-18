@@ -9,8 +9,9 @@
           height: `${optimalSize.height}px`,
         }"
       >
+        <!-- カメラプレビュー（実際のvideoストリーム） -->
         <video
-          v-if="showCamera && !getCurrentFrameData?.taken"
+          v-if="showCamera && !getCurrentFrameData?.taken && !isCameraInitializing"
           ref="videoElement"
           data-testid="camera-preview"
           class="camera-preview"
@@ -19,6 +20,7 @@
           playsinline
         />
 
+        <!-- 撮影済みフレームの画像表示 -->
         <img
           v-else-if="getCurrentFrameData?.taken && frameImageUrl"
           :src="frameImageUrl"
@@ -27,12 +29,12 @@
           alt="Captured frame"
         />
 
-        <!-- カメラが初期化中の場合のメッセージ -->
+        <!-- カメラ初期化中のローディング -->
         <div v-else-if="showCamera && !getCurrentFrameData?.taken && isCameraInitializing" class="camera-loading">
           <p>カメラを初期化中...</p>
         </div>
         
-        <!-- カメラ要素がない場合のメッセージ -->
+        <!-- その他の状態（フォールバック） -->
         <div v-else-if="showCamera && !getCurrentFrameData?.taken" class="camera-loading">
           <p>カメラの準備中...</p>
         </div>
