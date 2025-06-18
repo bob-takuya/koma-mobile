@@ -11,7 +11,14 @@ export default [
   },
   {
     name: 'app/files-to-ignore',
-    ignores: ['**/dist/**', '**/dist-ssr/**', '**/coverage/**', '**/scripts/**', '**/test-configs/**', '**/test-html/**'],
+    ignores: [
+      '**/dist/**',
+      '**/dist-ssr/**',
+      '**/coverage/**',
+      '**/scripts/**',
+      '**/test-configs/**',
+      '**/test-html/**',
+    ],
   },
 
   js.configs.recommended,

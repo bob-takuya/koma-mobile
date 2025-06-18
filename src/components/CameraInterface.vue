@@ -245,6 +245,9 @@ const onionSkinImages = computed(() => {
             url: cachedUrl,
             opacity: 0.3 * (1 - (i - 1) / onionSkinFrames.value),
           })
+        } else {
+          // 画像がキャッシュにない場合は自動的に読み込み
+          loadFrameImageForOnionSkin(frameIdx)
         }
       }
     }
@@ -334,7 +337,9 @@ const captureFrame = async () => {
     const nextFrameNumber = currentFrame.value + 1
     if (nextFrameNumber < totalFrames.value) {
       // 少し待ってから次のフレームに移動（撮影完了の視覚的フィードバックを提供）
-      setTimeout(() => {
+      setTimeout(async () => {
+        // 次のフレームに移動前に、現在のフレームの画像がオニオンスキンで使えるように確保
+        await nextTick()
         projectStore.setCurrentFrame(nextFrameNumber)
       }, 500) // 0.5秒待機
     }
@@ -402,10 +407,6 @@ const enableOverwrite = async () => {
     error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
   }
 }
-
-
-
-
 
 const loadAndDisplayFrame = async () => {
   const frameData = getCurrentFrameData.value
@@ -568,6 +569,56 @@ const loadFrameImage = async (frameNumber: number) => {
   }
 }
 
+// オニオンスキン用の画像読み込み（重複読み込みを防ぐ）
+const loadingOnionSkinImages = ref<Set<number>>(new Set())
+
+const loadFrameImageForOnionSkin = async (frameNumber: number) => {
+  if (!projectStore.bucketName || !projectStore.projectId || 
+      frameImageCache.value.has(frameNumber) || 
+      loadingOnionSkinImages.value.has(frameNumber)) {
+    return
+  }
+
+  loadingOnionSkinImages.value.add(frameNumber)
+
+  try {
+    const s3Service = new S3Service(projectStore.bucketName)
+    const blob = await s3Service.downloadImage(projectStore.projectId, frameNumber)
+    const url = URL.createObjectURL(blob)
+    frameImageCache.value.set(frameNumber, url)
+    console.log(`Loaded onion skin image for frame ${frameNumber}`)
+  } catch (err) {
+    console.error('Failed to load onion skin frame image:', frameNumber, err)
+  } finally {
+    loadingOnionSkinImages.value.delete(frameNumber)
+  }
+}
+
+// オニオンスキンに必要な画像を事前に読み込み
+const preloadOnionSkinImages = async (currentFrameIdx: number) => {
+  if (!showOnionSkin.value || !projectStore.config || onionSkinFrames.value === 0) {
+    return
+  }
+
+  const promises = []
+  
+  // 前のフレームを事前に読み込み
+  for (let i = 1; i <= onionSkinFrames.value; i++) {
+    const frameIdx = currentFrameIdx - i
+    if (frameIdx >= 0) {
+      const frame = projectStore.config.frames[frameIdx]
+      if (frame?.taken && frame.filename && !frameImageCache.value.has(frameIdx)) {
+        promises.push(loadFrameImageForOnionSkin(frameIdx))
+      }
+    }
+  }
+
+  if (promises.length > 0) {
+    console.log(`Preloading ${promises.length} onion skin images for frame ${currentFrameIdx}`)
+    await Promise.all(promises)
+  }
+}
+
 // Watchers
 let isFrameChanging = false
 
@@ -578,6 +629,9 @@ watch(currentFrame, async (newFrame, oldFrame) => {
 
     try {
       const frameData = projectStore.config?.frames[newFrame]
+
+      // オニオンスキンに必要な画像を事前に読み込み
+      await preloadOnionSkinImages(newFrame)
 
       if (frameData?.taken) {
         console.log('Frame is taken, showing image')
@@ -619,6 +673,20 @@ watch(
   { deep: true },
 )
 
+// オニオンスキンフレーム数が変更された時に画像を事前読み込み
+watch(onionSkinFrames, async () => {
+  if (showOnionSkin.value) {
+    await preloadOnionSkinImages(currentFrame.value)
+  }
+})
+
+// オニオンスキンの表示/非表示が切り替わった時
+watch(showOnionSkin, async (newValue) => {
+  if (newValue) {
+    await preloadOnionSkinImages(currentFrame.value)
+  }
+})
+
 // Lifecycle
 onMounted(async () => {
   console.log('CameraInterface mounted')
@@ -628,6 +696,9 @@ onMounted(async () => {
 
   // DOMが完全に準備されるまで待機
   await nextTick()
+
+  // オニオンスキンに必要な画像を事前読み込み
+  await preloadOnionSkinImages(currentFrame.value)
 
   if (!frameData?.taken) {
     console.log('Frame not taken, initializing camera')
