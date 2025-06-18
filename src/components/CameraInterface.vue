@@ -27,6 +27,16 @@
           alt="Captured frame"
         />
 
+        <!-- カメラが初期化中の場合のメッセージ -->
+        <div v-else-if="showCamera && !getCurrentFrameData?.taken && isCameraInitializing" class="camera-loading">
+          <p>カメラを初期化中...</p>
+        </div>
+        
+        <!-- カメラ要素がない場合のメッセージ -->
+        <div v-else-if="showCamera && !getCurrentFrameData?.taken" class="camera-loading">
+          <p>カメラの準備中...</p>
+        </div>
+
         <!-- Onion Skin Overlay -->
         <div v-if="showOnionSkin && onionSkinImages.length > 0" class="onion-skin-overlay">
           <img
@@ -190,6 +200,7 @@ const onionSkinFrames = ref(2)
 const showOnionSkin = ref(true)
 const pendingUploads = ref<FrameToSync[]>([])
 const frameImageCache = ref<Map<number, string>>(new Map())
+const isCameraInitializing = ref(false)
 
 // Computed properties
 const currentFrame = computed(() => projectStore.currentFrame)
@@ -265,6 +276,11 @@ const handleFrameChange = (event: Event) => {
 const initializeCamera = async () => {
   console.log('initializeCamera called, video element available:', !!videoElement.value)
 
+  if (isCameraInitializing.value) {
+    console.log('Camera initialization already in progress, skipping')
+    return
+  }
+
   if (!videoElement.value) {
     console.warn('Video element not available yet, waiting...')
     await nextTick()
@@ -273,7 +289,12 @@ const initializeCamera = async () => {
     }
   }
 
+  isCameraInitializing.value = true
+
   try {
+    // カメラサービスを停止してクリーンアップ
+    cameraService.stopCamera()
+
     // 既存のストリームがあれば停止
     if (videoElement.value.srcObject) {
       const tracks = (videoElement.value.srcObject as MediaStream).getTracks()
@@ -284,27 +305,32 @@ const initializeCamera = async () => {
     console.log('Starting camera...')
     const stream = await cameraService.startCamera()
 
-    if (videoElement.value) {
-      videoElement.value.srcObject = stream
-
-      // videoの再生を確実にする
-      try {
-        await videoElement.value.play()
-        console.log('Video started playing successfully')
-      } catch (playError) {
-        console.warn('Video play failed, but stream is set:', playError)
-        // play()が失敗してもストリームは設定されているので続行
-      }
-
-      showCamera.value = true
-      console.log('Camera initialized successfully')
-    } else {
-      throw new Error('Video element became unavailable during initialization')
+    // 初期化中にコンポーネントがアンマウントされたかチェック
+    if (!videoElement.value) {
+      console.warn('Video element became unavailable during initialization')
+      cameraService.stopCamera()
+      return
     }
+
+    videoElement.value.srcObject = stream
+
+    // videoの再生を確実にする
+    try {
+      await videoElement.value.play()
+      console.log('Video started playing successfully')
+    } catch (playError) {
+      console.warn('Video play failed, but stream is set:', playError)
+      // play()が失敗してもストリームは設定されているので続行
+    }
+
+    showCamera.value = true
+    console.log('Camera initialized successfully')
   } catch (err) {
     console.error('Failed to initialize camera:', err)
     error.value = 'カメラへのアクセスに失敗しました。カメラの許可を確認してください。'
     throw err
+  } finally {
+    isCameraInitializing.value = false
   }
 }
 
@@ -340,8 +366,9 @@ const captureFrame = async () => {
       setTimeout(async () => {
         // 次のフレームに移動前に、現在のフレームの画像がオニオンスキンで使えるように確保
         await nextTick()
+        console.log(`Auto-advancing to frame ${nextFrameNumber} after capture`)
         projectStore.setCurrentFrame(nextFrameNumber)
-      }, 500) // 0.5秒待機
+      }, 800) // 0.8秒待機（少し長めにして撮影完了を確認できるように）
     }
   } catch (err) {
     console.error('Failed to capture frame:', err)
@@ -392,15 +419,22 @@ const enableOverwrite = async () => {
     // DOMが更新されるまで待機
     await nextTick()
 
-    // 少し待ってからカメラを初期化（他の処理が完了するまで）
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    // videoElementが利用可能になるまで待つ
+    let retryCount = 0
+    const maxRetries = 10
+    
+    while (!videoElement.value && retryCount < maxRetries) {
+      console.log(`Waiting for video element for overwrite, retry ${retryCount + 1}/${maxRetries}`)
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      retryCount++
+    }
 
-    console.log('Initializing camera for overwrite...')
     if (videoElement.value) {
+      console.log('Initializing camera for overwrite...')
       await initializeCamera()
       console.log('Camera initialized successfully for overwrite')
     } else {
-      throw new Error('Video element not available for overwrite')
+      throw new Error('Video element not available for overwrite after retries')
     }
   } catch (err) {
     console.error('Failed to enable overwrite:', err)
@@ -642,17 +676,35 @@ watch(currentFrame, async (newFrame, oldFrame) => {
         console.log('Frame is not taken, showing camera')
         showCamera.value = true
 
-        // 少し待ってからカメラ初期化を試行
-        await nextTick()
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        // カメラを停止してから再初期化
+        cameraService.stopCamera()
 
-        if (videoElement.value && !cameraService.isActive) {
-          try {
-            console.log('Initializing camera for new frame...')
-            await initializeCamera()
-          } catch (err) {
-            console.error('Failed to reinitialize camera on frame change:', err)
-            error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+        // DOM更新を待つ
+        await nextTick()
+        
+        // カメラ初期化の重複を防ぐ
+        if (!isCameraInitializing.value) {
+          // videoElementが利用可能になるまで少し待つ
+          let retryCount = 0
+          const maxRetries = 10
+          
+          while (!videoElement.value && retryCount < maxRetries) {
+            console.log(`Waiting for video element, retry ${retryCount + 1}/${maxRetries}`)
+            await new Promise((resolve) => setTimeout(resolve, 100))
+            retryCount++
+          }
+
+          if (videoElement.value) {
+            try {
+              console.log('Initializing camera for new frame...')
+              await initializeCamera()
+            } catch (err) {
+              console.error('Failed to reinitialize camera on frame change:', err)
+              error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+            }
+          } else {
+            console.error('Video element not available after retries')
+            error.value = 'カメラエレメントが利用できません。ページを再読み込みしてください。'
           }
         }
       }
@@ -702,13 +754,28 @@ onMounted(async () => {
 
   if (!frameData?.taken) {
     console.log('Frame not taken, initializing camera')
-    try {
-      // 少し待ってからカメラを初期化
+    
+    // videoElementが利用可能になるまで待つ
+    let retryCount = 0
+    const maxRetries = 10
+    
+    while (!videoElement.value && retryCount < maxRetries) {
+      console.log(`Waiting for video element on mount, retry ${retryCount + 1}/${maxRetries}`)
       await new Promise((resolve) => setTimeout(resolve, 100))
-      await initializeCamera()
-    } catch (err) {
-      console.error('Failed to initialize camera on mount:', err)
-      error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+      await nextTick()
+      retryCount++
+    }
+    
+    if (videoElement.value) {
+      try {
+        await initializeCamera()
+      } catch (err) {
+        console.error('Failed to initialize camera on mount:', err)
+        error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+      }
+    } else {
+      console.error('Video element not available on mount after retries')
+      error.value = 'カメラエレメントが利用できません。ページを再読み込みしてください。'
     }
   } else {
     console.log('Frame already taken, not initializing camera')
@@ -722,9 +789,26 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  console.log('CameraInterface unmounting, cleaning up resources')
+  
+  // カメラ初期化フラグをリセット
+  isCameraInitializing.value = false
+  
+  // カメラを停止
   cameraService.stopCamera()
+  
+  // videoElementのストリームも確実に停止
+  if (videoElement.value?.srcObject) {
+    const tracks = (videoElement.value.srcObject as MediaStream).getTracks()
+    tracks.forEach((track) => track.stop())
+    videoElement.value.srcObject = null
+  }
+  
   // Clean up blob URLs
   frameImageCache.value.forEach((url) => URL.revokeObjectURL(url))
+  frameImageCache.value.clear()
+  
+  console.log('CameraInterface cleanup completed')
 })
 </script>
 
@@ -764,6 +848,17 @@ onUnmounted(() => {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.camera-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  color: white;
+  font-size: 18px;
 }
 
 .onion-skin-overlay {
