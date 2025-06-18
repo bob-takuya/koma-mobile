@@ -1,16 +1,29 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Create a mock store instance that can be updated per test
+const mockStore = {
+  hasBucketName: true,
+  hasProjectId: true,
+}
 
 // Mock the project store before importing the router
 vi.mock('../stores/project', () => ({
-  useProjectStore: vi.fn(() => ({
-    hasBucketName: true,
-  })),
+  useProjectStore: vi.fn(() => mockStore),
 }))
 
 // Import router after mocking
 import router from './index'
 
 describe('Router Configuration', () => {
+  beforeEach(() => {
+    // Reset mock store to default state before each test
+    mockStore.hasBucketName = true
+    mockStore.hasProjectId = true
+    
+    // Reset router to initial state
+    router.push('/')
+  })
+
   it('should have correct routes configured', () => {
     const routes = router.getRoutes()
     const routePaths = routes.map((route: any) => route.path)

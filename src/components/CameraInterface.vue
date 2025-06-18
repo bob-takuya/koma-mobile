@@ -262,7 +262,7 @@ const enableOverwrite = () => {
 
   showCamera.value = true
   error.value = null // Clear any existing errors
-  
+
   nextTick(() => {
     console.log('Initializing camera for overwrite...')
     initializeCamera()
@@ -297,11 +297,11 @@ const downloadFrame = async () => {
       if (!projectStore.bucketName) {
         throw new Error('Bucket name not configured')
       }
-      
+
       if (!projectStore.projectId) {
         throw new Error('Project ID not configured')
       }
-      
+
       const s3Service = new S3Service(projectStore.bucketName)
       blob = await s3Service.downloadImage(projectStore.projectId, frameData.frame)
       console.log('Downloaded from S3:', { blobSize: blob.size, blobType: blob.type })
@@ -316,11 +316,11 @@ const downloadFrame = async () => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    
+
     console.log('Download completed successfully')
   } catch (err) {
     console.error('Failed to download frame:', err)
-    
+
     // より詳細なエラーメッセージを提供
     if (err instanceof Error) {
       if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
@@ -361,14 +361,17 @@ const syncFrames = async () => {
   try {
     console.log('Creating S3Service with bucket:', projectStore.bucketName)
     const s3Service = new S3Service(projectStore.bucketName)
-    
+
     if (!projectStore.projectId) {
       throw new Error('Project ID not configured')
     }
-    
-    console.log('Syncing frames:', pendingUploads.value.map(p => ({ frame: p.frame, blobSize: p.blob.size })))
+
+    console.log(
+      'Syncing frames:',
+      pendingUploads.value.map((p) => ({ frame: p.frame, blobSize: p.blob.size })),
+    )
     const results = await s3Service.syncFrames(projectStore.projectId, pendingUploads.value)
-    
+
     console.log('Sync results:', results)
 
     // Remove successfully uploaded frames from pending
@@ -384,15 +387,15 @@ const syncFrames = async () => {
 
     const failedCount = results.length - successfulFrames.length
     if (failedCount > 0) {
-      const failedFrames = results.filter(r => !r.success)
+      const failedFrames = results.filter((r) => !r.success)
       console.error('Failed frames:', failedFrames)
-      error.value = `${failedCount} frames failed to sync: ${failedFrames.map(f => `Frame ${f.frame}: ${f.error}`).join(', ')}`
+      error.value = `${failedCount} frames failed to sync: ${failedFrames.map((f) => `Frame ${f.frame}: ${f.error}`).join(', ')}`
     } else {
       console.log('All frames synced successfully!')
     }
   } catch (err) {
     console.error('Failed to sync frames:', err)
-    
+
     // より詳細なエラーメッセージを提供
     if (err instanceof Error) {
       if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
@@ -413,7 +416,8 @@ const syncFrames = async () => {
 }
 
 const loadFrameImage = async (frameNumber: number) => {
-  if (!projectStore.bucketName || !projectStore.projectId || frameImageCache.value.has(frameNumber)) return
+  if (!projectStore.bucketName || !projectStore.projectId || frameImageCache.value.has(frameNumber))
+    return
 
   try {
     const s3Service = new S3Service(projectStore.bucketName)

@@ -214,14 +214,14 @@ export class S3Service {
     const key = `projects/${projectId}/${this.getFrameFilename(frameNumber)}`
     const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
 
-    console.log('uploadImage starting:', { 
-      projectId, 
-      frameNumber, 
-      key, 
-      url, 
+    console.log('uploadImage starting:', {
+      projectId,
+      frameNumber,
+      key,
+      url,
       blobSize: blob.size,
       blobType: blob.type,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     })
 
     try {
@@ -242,7 +242,7 @@ export class S3Service {
         url: response.url,
         type: response.type,
         redirected: response.redirected,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       })
 
       if (!response.ok) {
@@ -261,7 +261,7 @@ export class S3Service {
       console.log('Verification response:', {
         status: verifyResponse.status,
         ok: verifyResponse.ok,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       })
 
       if (verifyResponse.ok) {
@@ -275,7 +275,7 @@ export class S3Service {
       console.error('Failed to upload image via direct HTTP PUT:', {
         error,
         errorMessage: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       })
       throw new Error(`Failed to upload image: ${error}`)
     }
@@ -321,8 +321,8 @@ export class S3Service {
   async syncFrames(projectId: string, frames: FrameToSync[]): Promise<SyncResult[]> {
     console.log(`🔄 Starting sync for ${frames.length} frames:`, {
       projectId,
-      frames: frames.map(f => ({ frame: f.frame, blobSize: f.blob.size, blobType: f.blob.type })),
-      timestamp: new Date().toISOString()
+      frames: frames.map((f) => ({ frame: f.frame, blobSize: f.blob.size, blobType: f.blob.type })),
+      timestamp: new Date().toISOString(),
     })
 
     const results: SyncResult[] = []
@@ -351,10 +351,10 @@ export class S3Service {
 
     console.log('🏁 Sync completed:', {
       totalFrames: results.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
       results,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     })
 
     return results

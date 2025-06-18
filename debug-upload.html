@@ -1,78 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>S3 Upload Debug Test</title>
-</head>
-<body>
+  </head>
+  <body>
     <h1>S3 Direct Upload Test</h1>
     <div id="status"></div>
     <button onclick="testUpload()">Test Upload</button>
     <div id="results"></div>
 
     <script>
-        const BUCKET_NAME = 'koma-mobile-test-20250618-013942';
-        const PROJECT_ID = 'current-project';
-        
-        function log(message) {
-            const status = document.getElementById('status');
-            status.innerHTML += '<div>' + new Date().toISOString() + ': ' + message + '</div>';
-            console.log(message);
-        }
+      const BUCKET_NAME = 'koma-mobile-test-20250618-013942'
+      const PROJECT_ID = 'current-project'
 
-        async function testUpload() {
-            log('🔧 Starting S3 upload test...');
-            
-            // Create a test blob
-            const testData = 'Test image data ' + Date.now();
-            const blob = new Blob([testData], { type: 'image/webp' });
-            
-            const frameNumber = 99;
-            const filename = `frame_${frameNumber.toString().padStart(4, '0')}.webp`;
-            const key = `projects/${PROJECT_ID}/${filename}`;
-            const url = `https://${BUCKET_NAME}.s3.ap-northeast-1.amazonaws.com/${key}`;
-            
-            log(`📤 Uploading to: ${url}`);
-            log(`📄 Blob size: ${blob.size} bytes`);
-            
-            try {
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    body: blob,
-                    headers: {
-                        'Content-Type': 'image/webp',
-                    },
-                    mode: 'cors',
-                });
-                
-                log(`📨 Response status: ${response.status} ${response.statusText}`);
-                log(`📋 Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
-                
-                if (response.ok) {
-                    log('✅ Upload successful!');
-                    
-                    // Verify with HEAD request
-                    log('🔍 Verifying with HEAD request...');
-                    const verifyResponse = await fetch(url, {
-                        method: 'HEAD',
-                        mode: 'cors',
-                    });
-                    
-                    log(`🔍 HEAD status: ${verifyResponse.status}`);
-                    if (verifyResponse.ok) {
-                        log('✅ File verified in S3!');
-                    } else {
-                        log('❌ File not found in S3 after upload');
-                    }
-                } else {
-                    const errorText = await response.text();
-                    log(`❌ Upload failed: ${errorText}`);
-                }
-            } catch (error) {
-                log(`❌ Upload error: ${error.message}`);
+      function log(message) {
+        const status = document.getElementById('status')
+        status.innerHTML += '<div>' + new Date().toISOString() + ': ' + message + '</div>'
+        console.log(message)
+      }
+
+      async function testUpload() {
+        log('🔧 Starting S3 upload test...')
+
+        // Create a test blob
+        const testData = 'Test image data ' + Date.now()
+        const blob = new Blob([testData], { type: 'image/webp' })
+
+        const frameNumber = 99
+        const filename = `frame_${frameNumber.toString().padStart(4, '0')}.webp`
+        const key = `projects/${PROJECT_ID}/${filename}`
+        const url = `https://${BUCKET_NAME}.s3.ap-northeast-1.amazonaws.com/${key}`
+
+        log(`📤 Uploading to: ${url}`)
+        log(`📄 Blob size: ${blob.size} bytes`)
+
+        try {
+          const response = await fetch(url, {
+            method: 'PUT',
+            body: blob,
+            headers: {
+              'Content-Type': 'image/webp',
+            },
+            mode: 'cors',
+          })
+
+          log(`📨 Response status: ${response.status} ${response.statusText}`)
+          log(
+            `📋 Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`,
+          )
+
+          if (response.ok) {
+            log('✅ Upload successful!')
+
+            // Verify with HEAD request
+            log('🔍 Verifying with HEAD request...')
+            const verifyResponse = await fetch(url, {
+              method: 'HEAD',
+              mode: 'cors',
+            })
+
+            log(`🔍 HEAD status: ${verifyResponse.status}`)
+            if (verifyResponse.ok) {
+              log('✅ File verified in S3!')
+            } else {
+              log('❌ File not found in S3 after upload')
             }
+          } else {
+            const errorText = await response.text()
+            log(`❌ Upload failed: ${errorText}`)
+          }
+        } catch (error) {
+          log(`❌ Upload error: ${error.message}`)
         }
+      }
     </script>
-</body>
+  </body>
 </html>

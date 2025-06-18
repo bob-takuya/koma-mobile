@@ -11,11 +11,13 @@
 ### インストール手順
 
 1. **依存関係のインストール**
+
    ```bash
    npm install
    ```
 
 2. **開発サーバーの起動**
+
    ```bash
    npm run dev
    ```
@@ -57,10 +59,7 @@ AWS S3でパブリックリードアクセス可能なバケットを作成し�
       "Sid": "PublicReadGetObject",
       "Effect": "Allow",
       "Principal": "*",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
+      "Action": ["s3:GetObject", "s3:PutObject"],
       "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
     }
   ]
@@ -94,11 +93,13 @@ AWS S3でパブリックリードアクセス可能なバケットを作成し�
 ### よくある問題
 
 1. **同期エラー**
+
    - インターネット接続を確認
    - S3バケットのCORS設定を確認
    - バケット名とプロジェクトIDが正しいか確認
 
 2. **カメラアクセスエラー**
+
    - ブラウザのカメラ許可設定を確認
    - HTTPS接続が必要（モバイルデバイス）
 
