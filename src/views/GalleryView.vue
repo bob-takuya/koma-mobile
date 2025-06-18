@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { S3Service } from '../services/s3'
+import type { Frame } from '../types'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -68,7 +69,7 @@ const loadFrameImage = async (frameNumber: number) => {
   }
 }
 
-const getFrameImageUrl = (frame: any): string | undefined => {
+const getFrameImageUrl = (frame: Frame): string | undefined => {
   if (!frame.taken) return undefined
   return frameImageCache.value.get(frame.number) || undefined
 }
