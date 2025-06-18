@@ -11,7 +11,7 @@ const errorMessage = ref('')
 
 // API キーが設定されていない場合はセットアップページに戻る
 onMounted(() => {
-  if (!projectStore.hasBucketName) {
+  if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
     router.push('/setup')
   }
 })

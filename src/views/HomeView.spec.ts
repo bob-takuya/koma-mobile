@@ -31,7 +31,7 @@ describe('HomeView', () => {
   beforeEach(() => {
     // Reset mocks before each test
     vi.clearAllMocks()
-    
+
     // Reset mock store to default state
     mockProjectStore.hasBucketName = true
     mockProjectStore.hasProjectId = true

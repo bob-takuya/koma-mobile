@@ -1,11 +1,13 @@
 <template>
   <div id="app" class="stop-motion-app">
     <RouterView />
+    <OrientationPopup />
   </div>
 </template>
 
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import OrientationPopup from '@/components/OrientationPopup.vue'
 </script>
 
 <style>
@@ -27,7 +29,6 @@ body {
   width: 100vw;
   height: 100vh;
   position: relative;
-  overflow: hidden;
   background: #000000;
 }
 
@@ -35,6 +36,11 @@ body {
   width: 100%;
   height: 100%;
   background: #000000;
+}
+
+/* カメラインターフェースを含むページでのみoverflowを制限 */
+.camera-interface {
+  overflow: hidden;
 }
 
 /* Global mobile optimizations */

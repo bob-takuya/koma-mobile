@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import { useProjectStore } from '../stores/project'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,27 +18,11 @@ const router = createRouter({
       path: '/camera',
       name: 'camera',
       component: () => import('../views/CameraView.vue'),
-      beforeEnter: (to, from, next) => {
-        const projectStore = useProjectStore()
-        if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
-          next('/setup')
-        } else {
-          next()
-        }
-      },
     },
     {
       path: '/gallery',
       name: 'gallery',
       component: () => import('../views/GalleryView.vue'),
-      beforeEnter: (to, from, next) => {
-        const projectStore = useProjectStore()
-        if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
-          next('/setup')
-        } else {
-          next()
-        }
-      },
     },
     {
       path: '/test',

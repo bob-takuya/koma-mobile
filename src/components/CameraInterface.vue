@@ -1,35 +1,43 @@
 <template>
   <div class="camera-interface landscape-layout">
     <!-- Camera Preview / Frame Image -->
-    <div class="preview-container">
-      <video
-        v-if="showCamera && !getCurrentFrameData?.taken"
-        ref="videoElement"
-        data-testid="camera-preview"
-        class="camera-preview"
-        autoplay
-        muted
-        playsinline
-      />
-
-      <img
-        v-else-if="getCurrentFrameData?.taken && frameImageUrl"
-        :src="frameImageUrl"
-        data-testid="frame-image"
-        class="frame-image"
-        alt="Captured frame"
-      />
-
-      <!-- Onion Skin Overlay -->
-      <div v-if="showOnionSkin && onionSkinImages.length > 0" class="onion-skin-overlay">
-        <img
-          v-for="onionImage in onionSkinImages"
-          :key="onionImage.frame"
-          :src="onionImage.url"
-          :style="{ opacity: onionImage.opacity }"
-          class="onion-skin-image"
-          alt="Onion skin frame"
+    <div class="preview-container" ref="previewContainerRef">
+      <div 
+        class="media-wrapper"
+        :style="{ 
+          width: `${optimalSize.width}px`, 
+          height: `${optimalSize.height}px` 
+        }"
+      >
+        <video
+          v-if="showCamera && !getCurrentFrameData?.taken"
+          ref="videoElement"
+          data-testid="camera-preview"
+          class="camera-preview"
+          autoplay
+          muted
+          playsinline
         />
+
+        <img
+          v-else-if="getCurrentFrameData?.taken && frameImageUrl"
+          :src="frameImageUrl"
+          data-testid="frame-image"
+          class="frame-image"
+          alt="Captured frame"
+        />
+
+        <!-- Onion Skin Overlay -->
+        <div v-if="showOnionSkin && onionSkinImages.length > 0" class="onion-skin-overlay">
+          <img
+            v-for="onionImage in onionSkinImages"
+            :key="onionImage.frame"
+            :src="onionImage.url"
+            :style="{ opacity: onionImage.opacity }"
+            class="onion-skin-image"
+            alt="Onion skin frame"
+          />
+        </div>
       </div>
     </div>
 
@@ -135,12 +143,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useProjectStore } from '@/stores/project'
+import { useAspectRatio } from '@/composables/useAspectRatio'
 import { CameraService } from '@/services/camera'
 import { S3Service } from '@/services/s3'
 import type { FrameToSync } from '@/services/s3'
 
 const projectStore = useProjectStore()
 const cameraService = new CameraService()
+const { containerRef: previewContainerRef, optimalSize, updateSize } = useAspectRatio()
 
 // Reactive state
 const videoElement = ref<HTMLVideoElement>()
@@ -446,12 +456,24 @@ watch(currentFrame, (newFrame, oldFrame) => {
   }
 })
 
+// プロジェクト設定が変更された時にアスペクト比を更新
+watch(() => projectStore.config, () => {
+  nextTick(() => {
+    updateSize()
+  })
+}, { deep: true })
+
 // Lifecycle
 onMounted(() => {
   const frameData = getCurrentFrameData.value
   if (!frameData?.taken) {
     initializeCamera()
   }
+  
+  // 初期サイズ計算
+  nextTick(() => {
+    updateSize()
+  })
 })
 
 onUnmounted(() => {
@@ -477,6 +499,15 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #000;
+}
+
+.media-wrapper {
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .camera-preview,
@@ -484,6 +515,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .onion-skin-overlay {
@@ -660,6 +692,99 @@ onUnmounted(() => {
   .secondary-button {
     padding: 8px 16px;
     font-size: 14px;
+  }
+}
+
+/* モバイル対応とレスポンシブデザイン */
+@media (max-width: 768px) {
+  .bottom-panel {
+    padding: 12px;
+  }
+
+  .frame-slider-container,
+  .onion-skin-controls {
+    margin-bottom: 8px;
+  }
+
+  .action-buttons {
+    gap: 8px;
+  }
+
+  .capture-button,
+  .overwrite-button,
+  .download-button,
+  .sync-button {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}
+
+/* 横向き対応 */
+@media (orientation: landscape) {
+  .camera-interface {
+    flex-direction: row;
+  }
+
+  .preview-container {
+    flex: 1;
+    padding: 0.5rem;
+  }
+
+  .media-wrapper {
+    max-height: calc(100vh - 1rem);
+  }
+
+  .bottom-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 16px;
+  }
+
+  .controls-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .frame-slider-container,
+  .onion-skin-controls {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .action-buttons {
+    flex-shrink: 0;
+  }
+}
+
+/* 縦向きモバイルでの最適化 */
+@media (orientation: portrait) and (max-width: 768px) {
+  .media-wrapper {
+    max-width: 100%;
+    max-height: calc(100vh - 200px);
+  }
+
+  .bottom-panel {
+    padding: 16px;
+  }
+
+  .controls-container {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .frame-slider-container,
+  .onion-skin-controls {
+    width: 100%;
+  }
+
+  .action-buttons {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

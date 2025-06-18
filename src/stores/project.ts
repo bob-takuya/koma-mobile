@@ -132,31 +132,38 @@ export const useProjectStore = defineStore('project', () => {
 
   function loadBucketName() {
     const storedName = localStorage.getItem('stopmotion-bucket-name')
+    console.log('Loading bucket name from localStorage:', storedName)
     if (storedName) {
       bucketName.value = storedName
     }
+    console.log('Current bucket name:', bucketName.value)
   }
 
   function clearBucketName() {
     bucketName.value = null
     localStorage.removeItem('stopmotion-bucket-name')
+    console.log('Bucket name cleared')
   }
 
   function setProjectId(id: string) {
     projectId.value = id
     localStorage.setItem('stopmotion-project-id', id)
+    console.log('Project ID set:', id)
   }
 
   function loadProjectId() {
     const storedId = localStorage.getItem('stopmotion-project-id')
+    console.log('Loading project ID from localStorage:', storedId)
     if (storedId) {
       projectId.value = storedId
     }
+    console.log('Current project ID:', projectId.value)
   }
 
   function clearProjectId() {
     projectId.value = null
     localStorage.removeItem('stopmotion-project-id')
+    console.log('Project ID cleared')
   }
 
   function setCurrentFrame(frameNumber: number) {

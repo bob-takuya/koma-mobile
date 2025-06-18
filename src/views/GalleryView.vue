@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project'
+import { S3Service } from '../services/s3'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -10,13 +11,63 @@ const frames = computed(() => projectStore.config?.frames || [])
 const selectedFrames = ref<Set<number>>(new Set())
 const showDeleteConfirm = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')
+const frameImageCache = ref<Map<number, string>>(new Map())
+const loadingImages = ref<Set<number>>(new Set())
 
 // API キーが設定されていない場合はセットアップページに戻る
 onMounted(() => {
   if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
     router.push('/setup')
+  } else {
+    // 撮影済みフレームの画像を読み込み
+    loadTakenFrameImages()
   }
 })
+
+// フレームデータが変更された時に画像を再読み込み
+watch(frames, () => {
+  loadTakenFrameImages()
+}, { deep: true })
+
+const loadTakenFrameImages = async () => {
+  if (!projectStore.bucketName || !projectStore.projectId) return
+
+  const takenFrames = frames.value.filter(frame => frame.taken && frame.filename)
+  
+  for (const frame of takenFrames) {
+    if (!frameImageCache.value.has(frame.frame) && !loadingImages.value.has(frame.frame)) {
+      loadFrameImage(frame.frame)
+    }
+  }
+}
+
+const loadFrameImage = async (frameNumber: number) => {
+  if (!projectStore.bucketName || !projectStore.projectId || frameImageCache.value.has(frameNumber)) {
+    return
+  }
+
+  loadingImages.value.add(frameNumber)
+
+  try {
+    const s3Service = new S3Service(projectStore.bucketName)
+    const blob = await s3Service.downloadImage(projectStore.projectId, frameNumber)
+    const url = URL.createObjectURL(blob)
+    frameImageCache.value.set(frameNumber, url)
+  } catch (err) {
+    console.error('Failed to load frame image:', frameNumber, err)
+  } finally {
+    loadingImages.value.delete(frameNumber)
+  }
+}
+
+const getFrameImageUrl = (frame: any): string | undefined => {
+  if (!frame.taken) return undefined
+  return frameImageCache.value.get(frame.frame) || undefined
+}
+
+const isImageLoading = (frameNumber: number) => {
+  return loadingImages.value.has(frameNumber)
+}
 
 const navigateToCamera = () => {
   router.push('/camera')
@@ -63,6 +114,18 @@ const cancelDelete = () => {
 const toggleViewMode = () => {
   viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
 }
+
+// クリーンアップ処理
+const cleanup = () => {
+  frameImageCache.value.forEach((url) => {
+    URL.revokeObjectURL(url)
+  })
+  frameImageCache.value.clear()
+}
+
+onUnmounted(() => {
+  cleanup()
+})
 </script>
 
 <template>
@@ -201,9 +264,47 @@ const toggleViewMode = () => {
           @click="toggleFrameSelection(frame.frame)"
         >
           <div class="frame-image">
-            <img :src="frame.filename || ''" :alt="`Frame ${frame.frame}`" />
+            <div v-if="!frame.taken" class="frame-placeholder">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+              >
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span>未撮影</span>
+            </div>
+            <div v-else-if="isImageLoading(frame.frame)" class="frame-loading">
+              <div class="loading-spinner"></div>
+              <span>読み込み中...</span>
+            </div>
+            <img 
+              v-else-if="getFrameImageUrl(frame)" 
+              :src="getFrameImageUrl(frame)" 
+              :alt="`Frame ${frame.frame}`"
+              class="frame-img"
+            />
+            <div v-else class="frame-error">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+              >
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
+              <span>読み込みエラー</span>
+            </div>
             <div class="frame-overlay">
-              <div class="frame-sequence">{{ frame.frame }}</div>
+              <div class="frame-sequence">{{ frame.frame + 1 }}</div>
               <div class="frame-checkbox">
                 <svg
                   v-if="selectedFrames.has(frame.frame)"
@@ -218,7 +319,10 @@ const toggleViewMode = () => {
             </div>
           </div>
           <div class="frame-info">
-            <div class="frame-time">フレーム {{ frame.frame }}</div>
+            <div class="frame-time">フレーム {{ frame.frame + 1 }}</div>
+            <div class="frame-status" :class="{ taken: frame.taken }">
+              {{ frame.taken ? '撮影済み' : '未撮影' }}
+            </div>
           </div>
         </div>
       </div>
@@ -246,13 +350,50 @@ const toggleViewMode = () => {
             </div>
           </div>
           <div class="frame-thumbnail">
-            <img :src="frame.filename || ''" :alt="`Frame ${frame.frame}`" />
+            <div v-if="!frame.taken" class="thumbnail-placeholder">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+              >
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+            <div v-else-if="isImageLoading(frame.frame)" class="thumbnail-loading">
+              <div class="loading-spinner-small"></div>
+            </div>
+            <img 
+              v-else-if="getFrameImageUrl(frame)" 
+              :src="getFrameImageUrl(frame)" 
+              :alt="`Frame ${frame.frame}`"
+              class="thumbnail-img"
+            />
+            <div v-else class="thumbnail-error">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+              >
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
+            </div>
           </div>
           <div class="frame-details">
-            <div class="frame-sequence-large">フレーム #{{ frame.frame }}</div>
+            <div class="frame-sequence-large">フレーム #{{ frame.frame + 1 }}</div>
             <div class="frame-meta">
-              <span class="frame-time">{{ frame.taken ? '撮影済み' : '未撮影' }}</span>
-              <span class="frame-note">{{ frame.note || '' }}</span>
+              <span class="frame-time" :class="{ taken: frame.taken }">
+                {{ frame.taken ? '撮影済み' : '未撮影' }}
+              </span>
+              <span v-if="frame.note" class="frame-note">{{ frame.note }}</span>
             </div>
           </div>
         </div>
@@ -282,6 +423,7 @@ const toggleViewMode = () => {
   background: #f8f9fa;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .header {
@@ -448,10 +590,57 @@ const toggleViewMode = () => {
   overflow: hidden;
 }
 
-.frame-image img {
+.frame-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.frame-placeholder,
+.frame-loading,
+.frame-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  color: #6c757d;
+  font-size: 0.75rem;
+  gap: 0.5rem;
+}
+
+.frame-loading {
+  background: #e9ecef;
+}
+
+.frame-error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #e9ecef;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e9ecef;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .frame-overlay {
@@ -505,6 +694,20 @@ const toggleViewMode = () => {
 .frame-time {
   font-size: 0.75rem;
   color: #6c757d;
+  margin-bottom: 0.25rem;
+}
+
+.frame-status {
+  font-size: 0.625rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  background: #dc3545;
+  color: white;
+  display: inline-block;
+}
+
+.frame-status.taken {
+  background: #28a745;
 }
 
 .frames-list {
@@ -555,6 +758,38 @@ const toggleViewMode = () => {
   height: 60px;
   border-radius: 6px;
   overflow: hidden;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbnail-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnail-placeholder,
+.thumbnail-loading,
+.thumbnail-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  font-size: 0.625rem;
+}
+
+.thumbnail-loading {
+  background: #e9ecef;
+}
+
+.thumbnail-error {
+  background: #f8d7da;
+  color: #721c24;
 }
 
 .frame-thumbnail img {
@@ -580,74 +815,22 @@ const toggleViewMode = () => {
   color: #6c757d;
 }
 
-.delete-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.delete-dialog {
-  background: white;
+.frame-meta .frame-time {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
   border-radius: 12px;
-  padding: 2rem;
-  max-width: 400px;
-  width: 100%;
-  text-align: center;
-}
-
-.delete-title {
-  color: #dc3545;
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.delete-message {
-  color: #495057;
-  margin-bottom: 2rem;
-  line-height: 1.5;
-}
-
-.delete-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-}
-
-.cancel-button,
-.confirm-button {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.cancel-button {
-  background: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
-}
-
-.cancel-button:hover {
-  background: #e9ecef;
-}
-
-.confirm-button {
   background: #dc3545;
   color: white;
-  border: 1px solid #dc3545;
 }
 
-.confirm-button:hover {
-  background: #c82333;
+.frame-meta .frame-time.taken {
+  background: #28a745;
+}
+
+.frame-note {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-style: italic;
 }
 
 /* モバイル対応 */

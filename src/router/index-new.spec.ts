@@ -19,7 +19,7 @@ describe('Router Configuration', () => {
     // Reset mock store to default state before each test
     mockStore.hasBucketName = true
     mockStore.hasProjectId = true
-    
+
     // Reset router to initial state
     router.push('/')
   })
@@ -79,13 +79,16 @@ describe('Router Configuration', () => {
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it('should have route guards for protected routes', () => {
+  it('should allow access to protected routes without guards', () => {
     const routes = router.getRoutes()
     const cameraRoute = routes.find((route: any) => route.path === '/camera')
     const galleryRoute = routes.find((route: any) => route.path === '/gallery')
 
-    expect(cameraRoute?.beforeEnter).toBeDefined()
-    expect(galleryRoute?.beforeEnter).toBeDefined()
+    // Routes should exist but not have beforeEnter guards since authentication is handled in components
+    expect(cameraRoute).toBeDefined()
+    expect(galleryRoute).toBeDefined()
+    expect(cameraRoute?.beforeEnter).toBeUndefined()
+    expect(galleryRoute?.beforeEnter).toBeUndefined()
   })
 
   it('should maintain browser history correctly', async () => {
