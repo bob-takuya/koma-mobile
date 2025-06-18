@@ -51,7 +51,7 @@ const videoRef = ref<HTMLVideoElement>()
 const cameraActive = ref(false)
 const capturedPhotos = ref<{ blob: Blob; url: string }[]>([])
 const uploading = ref(false)
-const uploadResults = ref<any[]>([])
+const uploadResults = ref<Array<{ frame: number; success: boolean; error?: string }>>([])
 
 const cameraService = new CameraService()
 const s3Service = new S3Service('test-bucket-name')

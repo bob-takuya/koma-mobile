@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { S3Service } from '@/services/s3'
-import type { ProjectConfig, Frame } from '@/types'
+import type { ProjectConfig } from '@/types'
 
 // 直接HTTPアクセス用のサービス
 class S3DirectService {
@@ -55,7 +55,7 @@ class S3DirectService {
       console.log('Config parsed successfully:', data)
 
       return data
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('S3 direct HTTP downloadConfig error:', error)
       throw error
     }
@@ -78,7 +78,7 @@ class S3DirectService {
       })
 
       return response.status === 200
-        } catch (error: any) {
+    } catch (error: unknown) {
       console.error('S3 direct HTTP checkProjectExists error:', error)
       throw error
     }
@@ -179,36 +179,42 @@ export const useProjectStore = defineStore('project', () => {
       // プロジェクトが存在する場合、configをダウンロード
       const data = await s3Service.downloadConfig(projectId)
       config.value = data
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load config:', err)
       
       // デバッグ情報を保存
+      const errorObj = err as Error & { 
+        code?: string
+        $metadata?: unknown
+        originalError?: unknown
+      }
+      
       const errorDetails = {
-        message: err.message || 'Unknown error',
-        name: err.name || 'Unknown',
-        code: err.code || 'None',
-        stack: err.stack || 'No stack trace',
-        metadata: err.$metadata || 'No metadata',
-        originalError: err.originalError || 'No original error'
+        message: errorObj.message || 'Unknown error',
+        name: errorObj.name || 'Unknown',
+        code: errorObj.code || 'None',
+        stack: errorObj.stack || 'No stack trace',
+        metadata: errorObj.$metadata || 'No metadata',
+        originalError: errorObj.originalError || 'No original error'
       }
       
       debugError.value = `Error details: ${errorDetails.message}\nError name: ${errorDetails.name}\nError code: ${errorDetails.code}\nMetadata: ${JSON.stringify(errorDetails.metadata, null, 2)}\nStack: ${errorDetails.stack}`
       
-      if (err.message === 'Project not found') {
+      if (errorObj.message === 'Project not found') {
         error.value = 'Project not found. Please check the project ID.'
-      } else if (err.name === 'CORSError' || err.code === 'CORS_OR_NETWORK') {
+      } else if (errorObj.name === 'CORSError' || errorObj.code === 'CORS_OR_NETWORK') {
         error.value = 'Network request failed. Check your internet connection and S3 configuration.'
-      } else if (err.name === 'NoSuchBucket') {
+      } else if (errorObj.name === 'NoSuchBucket') {
         error.value = 'S3 bucket not found. Please check the bucket name.'
-      } else if (err.name === 'AccessDenied' || err.code === 'AccessDenied') {
+      } else if (errorObj.name === 'AccessDenied' || errorObj.code === 'AccessDenied') {
         error.value = 'Access denied. Please check your AWS credentials and bucket permissions.'
-      } else if (err.name === 'CredentialsError' || err.message?.includes('credentials')) {
+      } else if (errorObj.name === 'CredentialsError' || errorObj.message?.includes('credentials')) {
         error.value = 'AWS credentials not found or invalid. Please configure your AWS credentials.'
-      } else if (err.name === 'NetworkError' || err.message?.includes('network')) {
+      } else if (errorObj.name === 'NetworkError' || errorObj.message?.includes('network')) {
         error.value = 'Network error. Please check your internet connection.'
-      } else if (err.message?.includes('CORS')) {
+      } else if (errorObj.message?.includes('CORS')) {
         error.value = 'CORS error. S3 bucket CORS configuration may be incorrect.'
-      } else if (err.message?.includes('fetch')) {
+      } else if (errorObj.message?.includes('fetch')) {
         error.value = 'Network request failed. Check your internet connection and S3 configuration.'
       } else {
         error.value = 'Failed to load project config. Please check your connection and try again.'

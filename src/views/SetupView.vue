@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-const handleSetupComplete = (projectId: string) => {
+const handleSetupComplete = () => {
   router.push('/camera')
 }
 </script>

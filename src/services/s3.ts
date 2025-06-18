@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import type { ProjectConfig } from '@/types'
 
 export interface SyncResult {
@@ -118,18 +118,23 @@ export class S3Service {
       })
 
       return data
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('S3 direct HTTP downloadConfig error:', error)
       
       // プロジェクトが存在しない場合のエラーを特別に処理
-      if (error.message === 'Project not found') {
+      if (error instanceof Error && error.message === 'Project not found') {
         throw error
       }
       
       // その他のエラー
-      const enhancedError = new Error(`Failed to download config: ${error.message || error}`) as any
-      enhancedError.name = error.name || 'HTTPError'
-      enhancedError.code = error.code || 'UNKNOWN'
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const enhancedError = new Error(`Failed to download config: ${errorMessage}`) as Error & {
+        name: string
+        code: string
+        originalError: unknown
+      }
+      enhancedError.name = error instanceof Error ? error.name : 'HTTPError'
+      enhancedError.code = 'code' in (error as object) ? (error as { code: string }).code : 'UNKNOWN'
       enhancedError.originalError = error
       throw enhancedError
     }
@@ -152,12 +157,16 @@ export class S3Service {
       })
 
       return response.status === 200
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('S3 direct HTTP checkProjectExists error:', error)
       
       // ネットワークエラーの場合
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        const enhancedError = new Error('Network error - check your internet connection and S3 bucket CORS configuration') as any
+        const enhancedError = new Error('Network error - check your internet connection and S3 bucket CORS configuration') as Error & {
+          name: string
+          code: string
+          originalError: unknown
+        }
         enhancedError.name = 'NetworkError'
         enhancedError.code = 'NETWORK'
         enhancedError.originalError = error
@@ -165,9 +174,14 @@ export class S3Service {
       }
       
       // その他のエラー
-      const enhancedError = new Error(`Failed to check project existence: ${error.message || error}`) as any
-      enhancedError.name = error.name || 'HTTPError'
-      enhancedError.code = error.code || 'UNKNOWN'
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const enhancedError = new Error(`Failed to check project existence: ${errorMessage}`) as Error & {
+        name: string
+        code: string
+        originalError: unknown
+      }
+      enhancedError.name = error instanceof Error ? error.name : 'HTTPError'
+      enhancedError.code = 'code' in (error as object) ? (error as { code: string }).code : 'UNKNOWN'
       enhancedError.originalError = error
       throw enhancedError
     }

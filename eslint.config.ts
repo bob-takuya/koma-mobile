@@ -68,6 +68,29 @@ export default [
     },
   },
 
+  // Node.js script files
+  {
+    files: ['*.js', 'scripts/*.js', 'create-*.js', 'setup-*.js'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        global: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        Buffer: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        fetch: 'readonly',
+        Blob: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
   // Test files configuration - allow any types and test globals
   {
     files: ['**/*.spec.ts', '**/*.test.ts', '**/*.spec.js', '**/*.test.js', 'src/test/**/*'],
