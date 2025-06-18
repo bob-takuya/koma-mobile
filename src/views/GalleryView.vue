@@ -73,6 +73,12 @@ const navigateToCamera = () => {
   router.push('/camera')
 }
 
+const navigateToFrame = (frameNumber: number) => {
+  // フレームを選択してからカメラ画面に遷移
+  projectStore.setCurrentFrame(frameNumber)
+  router.push('/camera')
+}
+
 const navigateToSetup = () => {
   router.push('/setup')
 }
@@ -261,7 +267,7 @@ onUnmounted(() => {
           :key="frame.frame"
           class="frame-item"
           :class="{ selected: selectedFrames.has(frame.frame) }"
-          @click="toggleFrameSelection(frame.frame)"
+          @click="navigateToFrame(frame.frame)"
         >
           <div class="frame-image">
             <div v-if="!frame.taken" class="frame-placeholder">
@@ -305,7 +311,7 @@ onUnmounted(() => {
             </div>
             <div class="frame-overlay">
               <div class="frame-sequence">{{ frame.frame + 1 }}</div>
-              <div class="frame-checkbox">
+              <div class="frame-checkbox" @click.stop="toggleFrameSelection(frame.frame)">
                 <svg
                   v-if="selectedFrames.has(frame.frame)"
                   width="20"
@@ -334,9 +340,9 @@ onUnmounted(() => {
           :key="frame.frame"
           class="frame-row"
           :class="{ selected: selectedFrames.has(frame.frame) }"
-          @click="toggleFrameSelection(frame.frame)"
+          @click="navigateToFrame(frame.frame)"
         >
-          <div class="frame-checkbox-col">
+          <div class="frame-checkbox-col" @click.stop="toggleFrameSelection(frame.frame)">
             <div class="frame-checkbox">
               <svg
                 v-if="selectedFrames.has(frame.frame)"
@@ -572,11 +578,23 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .frame-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.frame-item:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 123, 255, 0.1);
+  pointer-events: none;
 }
 
 .frame-item.selected {
@@ -680,6 +698,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.frame-checkbox:hover {
+  background: rgba(0, 123, 255, 0.8);
+  transform: scale(1.1);
 }
 
 .frame-item.selected .frame-checkbox {
@@ -725,10 +750,13 @@ onUnmounted(() => {
   gap: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .frame-row:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  background: #f8f9fa;
 }
 
 .frame-row.selected {
@@ -738,6 +766,13 @@ onUnmounted(() => {
 
 .frame-checkbox-col {
   flex-shrink: 0;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.frame-checkbox-col:hover {
+  background: rgba(0, 123, 255, 0.1);
 }
 
 .frame-row .frame-checkbox {
