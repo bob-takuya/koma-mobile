@@ -4,13 +4,28 @@ export class CameraService {
   private _isInitializing = false
 
   async startCamera(): Promise<MediaStream> {
+    console.log('CameraService.startCamera called, current state:', {
+      isActive: this.isActive,
+      isInitializing: this._isInitializing,
+      hasStream: !!this.stream
+    })
+
     // 既に初期化中の場合は待機
     if (this._isInitializing) {
       console.log('Camera initialization already in progress, waiting...')
-      while (this._isInitializing) {
+      let waitCount = 0
+      while (this._isInitializing && waitCount < 50) { // 最大5秒待機
         await new Promise((resolve) => setTimeout(resolve, 100))
+        waitCount++
       }
+      
+      if (this._isInitializing) {
+        console.warn('Camera initialization timed out')
+        this._isInitializing = false
+      }
+      
       if (this.stream && this.isActive) {
+        console.log('Returning stream from completed initialization')
         return this.stream
       }
     }
@@ -22,6 +37,7 @@ export class CameraService {
     }
 
     this._isInitializing = true
+    console.log('Starting new camera initialization...')
 
     try {
       // 既存のストリームがあれば先に停止
@@ -42,7 +58,7 @@ export class CameraService {
       })
 
       this.isActive = true
-      console.log('Camera started successfully')
+      console.log('Camera started successfully, stream tracks:', this.stream.getTracks().length)
       return this.stream
     } catch (error) {
       console.error('Failed to start camera:', error)
@@ -51,6 +67,10 @@ export class CameraService {
       throw error
     } finally {
       this._isInitializing = false
+      console.log('Camera initialization completed, final state:', {
+        isActive: this.isActive,
+        hasStream: !!this.stream
+      })
     }
   }
 

@@ -11,7 +11,7 @@
       >
         <!-- カメラプレビュー（実際のvideoストリーム） -->
         <video
-          v-if="showCamera && !getCurrentFrameData?.taken && !isCameraInitializing"
+          v-if="showCamera && !getCurrentFrameData?.taken && !isCameraInitializing && videoElement"
           ref="videoElement"
           data-testid="camera-preview"
           class="camera-preview"
@@ -283,17 +283,26 @@ const initializeCamera = async () => {
     return
   }
 
-  if (!videoElement.value) {
-    console.warn('Video element not available yet, waiting...')
-    await nextTick()
-    if (!videoElement.value) {
-      throw new Error('Video element is not available')
-    }
-  }
-
   isCameraInitializing.value = true
 
   try {
+    // videoElementの存在を確認し、必要なら待機
+    let videoElementRetries = 0
+    const maxVideoRetries = 20
+    
+    while (!videoElement.value && videoElementRetries < maxVideoRetries) {
+      console.log(`Waiting for video element, attempt ${videoElementRetries + 1}/${maxVideoRetries}`)
+      await new Promise(resolve => setTimeout(resolve, 50))
+      await nextTick()
+      videoElementRetries++
+    }
+
+    if (!videoElement.value) {
+      throw new Error('Video element is not available after retries')
+    }
+
+    console.log('Video element confirmed, proceeding with camera initialization')
+
     // カメラサービスを停止してクリーンアップ
     cameraService.stopCamera()
 
@@ -307,28 +316,36 @@ const initializeCamera = async () => {
     console.log('Starting camera...')
     const stream = await cameraService.startCamera()
 
-    // 初期化中にコンポーネントがアンマウントされたかチェック
+    // ストリーム取得後にもう一度videoElementの存在確認
     if (!videoElement.value) {
       console.warn('Video element became unavailable during initialization')
       cameraService.stopCamera()
-      return
+      throw new Error('Video element became unavailable during camera initialization')
     }
 
+    console.log('Setting stream to video element')
     videoElement.value.srcObject = stream
 
+    // DOM更新を待機
+    await nextTick()
+
     // videoの再生を確実にする
-    try {
-      await videoElement.value.play()
-      console.log('Video started playing successfully')
-    } catch (playError) {
-      console.warn('Video play failed, but stream is set:', playError)
-      // play()が失敗してもストリームは設定されているので続行
+    if (videoElement.value) {
+      try {
+        await videoElement.value.play()
+        console.log('Video started playing successfully')
+      } catch (playError) {
+        console.warn('Video play failed, but stream is set:', playError)
+        // play()が失敗してもストリームは設定されているので続行
+      }
     }
 
     showCamera.value = true
     console.log('Camera initialized successfully')
   } catch (err) {
     console.error('Failed to initialize camera:', err)
+    // カメラサービスを確実に停止
+    cameraService.stopCamera()
     error.value = 'カメラへのアクセスに失敗しました。カメラの許可を確認してください。'
     throw err
   } finally {
@@ -421,22 +438,13 @@ const enableOverwrite = async () => {
     // DOMが更新されるまで待機
     await nextTick()
 
-    // videoElementが利用可能になるまで待つ
-    let retryCount = 0
-    const maxRetries = 10
-    
-    while (!videoElement.value && retryCount < maxRetries) {
-      console.log(`Waiting for video element for overwrite, retry ${retryCount + 1}/${maxRetries}`)
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      retryCount++
-    }
-
-    if (videoElement.value) {
+    try {
       console.log('Initializing camera for overwrite...')
       await initializeCamera()
       console.log('Camera initialized successfully for overwrite')
-    } else {
-      throw new Error('Video element not available for overwrite after retries')
+    } catch (err) {
+      console.error('Failed to initialize camera for overwrite:', err)
+      throw err
     }
   } catch (err) {
     console.error('Failed to enable overwrite:', err)
@@ -686,28 +694,15 @@ watch(currentFrame, async (newFrame, oldFrame) => {
         
         // カメラ初期化の重複を防ぐ
         if (!isCameraInitializing.value) {
-          // videoElementが利用可能になるまで少し待つ
-          let retryCount = 0
-          const maxRetries = 10
-          
-          while (!videoElement.value && retryCount < maxRetries) {
-            console.log(`Waiting for video element, retry ${retryCount + 1}/${maxRetries}`)
-            await new Promise((resolve) => setTimeout(resolve, 100))
-            retryCount++
+          try {
+            console.log('Initializing camera for new frame...')
+            await initializeCamera()
+          } catch (err) {
+            console.error('Failed to reinitialize camera on frame change:', err)
+            error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
           }
-
-          if (videoElement.value) {
-            try {
-              console.log('Initializing camera for new frame...')
-              await initializeCamera()
-            } catch (err) {
-              console.error('Failed to reinitialize camera on frame change:', err)
-              error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
-            }
-          } else {
-            console.error('Video element not available after retries')
-            error.value = 'カメラエレメントが利用できません。ページを再読み込みしてください。'
-          }
+        } else {
+          console.log('Camera initialization already in progress, skipping')
         }
       }
     } finally {
@@ -757,27 +752,11 @@ onMounted(async () => {
   if (!frameData?.taken) {
     console.log('Frame not taken, initializing camera')
     
-    // videoElementが利用可能になるまで待つ
-    let retryCount = 0
-    const maxRetries = 10
-    
-    while (!videoElement.value && retryCount < maxRetries) {
-      console.log(`Waiting for video element on mount, retry ${retryCount + 1}/${maxRetries}`)
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      await nextTick()
-      retryCount++
-    }
-    
-    if (videoElement.value) {
-      try {
-        await initializeCamera()
-      } catch (err) {
-        console.error('Failed to initialize camera on mount:', err)
-        error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
-      }
-    } else {
-      console.error('Video element not available on mount after retries')
-      error.value = 'カメラエレメントが利用できません。ページを再読み込みしてください。'
+    try {
+      await initializeCamera()
+    } catch (err) {
+      console.error('Failed to initialize camera on mount:', err)
+      error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
     }
   } else {
     console.log('Frame already taken, not initializing camera')
