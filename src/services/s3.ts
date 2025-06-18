@@ -214,7 +214,15 @@ export class S3Service {
     const key = `projects/${projectId}/${this.getFrameFilename(frameNumber)}`
     const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
 
-    console.log('Uploading image via direct HTTP PUT:', { projectId, frameNumber, key, url, blobSize: blob.size })
+    console.log('uploadImage starting:', { 
+      projectId, 
+      frameNumber, 
+      key, 
+      url, 
+      blobSize: blob.size,
+      blobType: blob.type,
+      timestamp: new Date().toISOString()
+    })
 
     try {
       const response = await fetch(url, {
@@ -226,19 +234,49 @@ export class S3Service {
         mode: 'cors',
       })
 
-      console.log('Upload response:', {
+      console.log('Upload response details:', {
         status: response.status,
         statusText: response.statusText,
+        ok: response.ok,
         headers: Object.fromEntries(response.headers.entries()),
+        url: response.url,
+        type: response.type,
+        redirected: response.redirected,
+        timestamp: new Date().toISOString()
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        const errorText = await response.text().catch(() => 'Unable to read error response')
+        console.error('Upload failed with response body:', errorText)
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`)
+      }
+
+      // Verify upload by attempting a HEAD request
+      console.log('Verifying upload with HEAD request...')
+      const verifyResponse = await fetch(url, {
+        method: 'HEAD',
+        mode: 'cors',
+      })
+
+      console.log('Verification response:', {
+        status: verifyResponse.status,
+        ok: verifyResponse.ok,
+        timestamp: new Date().toISOString()
+      })
+
+      if (verifyResponse.ok) {
+        console.log('✅ Image upload verified successfully via HEAD request')
+      } else {
+        console.warn('⚠️ Upload verification failed - file may not be accessible')
       }
 
       console.log('Image uploaded successfully via direct HTTP PUT')
     } catch (error) {
-      console.error('Failed to upload image via direct HTTP PUT:', error)
+      console.error('Failed to upload image via direct HTTP PUT:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      })
       throw new Error(`Failed to upload image: ${error}`)
     }
   }
@@ -281,23 +319,43 @@ export class S3Service {
   }
 
   async syncFrames(projectId: string, frames: FrameToSync[]): Promise<SyncResult[]> {
+    console.log(`🔄 Starting sync for ${frames.length} frames:`, {
+      projectId,
+      frames: frames.map(f => ({ frame: f.frame, blobSize: f.blob.size, blobType: f.blob.type })),
+      timestamp: new Date().toISOString()
+    })
+
     const results: SyncResult[] = []
 
     for (const frameData of frames) {
+      console.log(`📤 Syncing frame ${frameData.frame}...`)
       try {
         await this.uploadImage(projectId, frameData.frame, frameData.blob)
-        results.push({
+        const result = {
           frame: frameData.frame,
           success: true,
-        })
+        }
+        results.push(result)
+        console.log(`✅ Frame ${frameData.frame} synced successfully`)
       } catch (error) {
-        results.push({
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const result = {
           frame: frameData.frame,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
+          error: errorMessage,
+        }
+        results.push(result)
+        console.error(`❌ Frame ${frameData.frame} sync failed:`, errorMessage)
       }
     }
+
+    console.log('🏁 Sync completed:', {
+      totalFrames: results.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results,
+      timestamp: new Date().toISOString()
+    })
 
     return results
   }
