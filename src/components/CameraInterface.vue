@@ -329,6 +329,15 @@ const captureFrame = async () => {
     projectStore.markFrameTaken(currentFrame.value, filename)
 
     showCamera.value = false
+
+    // 自動的に次のフレームに移動
+    const nextFrameNumber = currentFrame.value + 1
+    if (nextFrameNumber < totalFrames.value) {
+      // 少し待ってから次のフレームに移動（撮影完了の視覚的フィードバックを提供）
+      setTimeout(() => {
+        projectStore.setCurrentFrame(nextFrameNumber)
+      }, 500) // 0.5秒待機
+    }
   } catch (err) {
     console.error('Failed to capture frame:', err)
     error.value = 'Failed to capture frame. Please try again.'
