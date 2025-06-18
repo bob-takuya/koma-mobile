@@ -8,11 +8,11 @@ const projectStore = useProjectStore()
 
 // アプリケーション起動時に適切なページにリダイレクト
 onMounted(() => {
-  if (projectStore.hasBucketName) {
-    // バケット名が設定済みの場合はカメラページへ
+  if (projectStore.hasBucketName && projectStore.hasProjectId) {
+    // バケット名とプロジェクトIDが設定済みの場合はカメラページへ
     router.push('/camera')
   } else {
-    // バケット名が未設定の場合はセットアップページへ
+    // バケット名かプロジェクトIDが未設定の場合はセットアップページへ
     router.push('/setup')
   }
 })

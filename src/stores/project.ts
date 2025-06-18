@@ -93,6 +93,7 @@ export const useProjectStore = defineStore('project', () => {
   const error = ref<string | null>(null)
   const debugError = ref<string | null>(null) // デバッグ用の詳細エラー
   const bucketName = ref<string | null>(null)
+  const projectId = ref<string | null>(null)
 
   // Getters
   const getCurrentFrameData = computed(() => {
@@ -119,6 +120,10 @@ export const useProjectStore = defineStore('project', () => {
     return !!bucketName.value
   })
 
+  const hasProjectId = computed(() => {
+    return !!projectId.value
+  })
+
   // Actions
   function setBucketName(name: string) {
     bucketName.value = name
@@ -135,6 +140,23 @@ export const useProjectStore = defineStore('project', () => {
   function clearBucketName() {
     bucketName.value = null
     localStorage.removeItem('stopmotion-bucket-name')
+  }
+
+  function setProjectId(id: string) {
+    projectId.value = id
+    localStorage.setItem('stopmotion-project-id', id)
+  }
+
+  function loadProjectId() {
+    const storedId = localStorage.getItem('stopmotion-project-id')
+    if (storedId) {
+      projectId.value = storedId
+    }
+  }
+
+  function clearProjectId() {
+    projectId.value = null
+    localStorage.removeItem('stopmotion-project-id')
   }
 
   function setCurrentFrame(frameNumber: number) {
@@ -255,15 +277,20 @@ export const useProjectStore = defineStore('project', () => {
     error,
     debugError,
     bucketName,
+    projectId,
     // Getters
     getCurrentFrameData,
     takenFramesCount,
     totalFrames,
     hasBucketName,
+    hasProjectId,
     // Actions
     setBucketName,
     loadBucketName,
     clearBucketName,
+    setProjectId,
+    loadProjectId,
+    clearProjectId,
     setCurrentFrame,
     markFrameTaken,
     loadConfig,

@@ -86,12 +86,14 @@ const handleSetup = async () => {
 
   try {
     projectStore.setBucketName(bucketName.value.trim())
+    projectStore.setProjectId(projectId.value.trim())
     await projectStore.loadConfig(projectId.value.trim())
 
     // プロジェクトストアのエラーをチェック
     if (projectStore.error) {
       error.value = projectStore.error
       projectStore.clearBucketName()
+      projectStore.clearProjectId()
       return
     }
 

@@ -180,6 +180,16 @@ describe('S3 Service', () => {
         },
       })
 
+      // Mock successful fetch response for HEAD verification request
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          entries: () => [['content-type', 'image/webp']],
+        },
+      })
+
       await s3Service.uploadImage(mockProjectId, frameNumber, mockBlob)
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -235,6 +245,7 @@ describe('S3 Service', () => {
         headers: {
           entries: () => [],
         },
+        text: () => Promise.resolve('Internal server error details'),
       })
 
       await expect(s3Service.uploadImage(mockProjectId, 1, mockBlob)).rejects.toThrow(
@@ -259,8 +270,16 @@ describe('S3 Service', () => {
         { frame: 1, blob: new Blob(['data1']) },
       ]
 
-      // Mock first upload success, second upload failure
+      // Mock first upload success (PUT + HEAD verification), second upload failure
       mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            entries: () => [],
+          },
+        })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
@@ -276,6 +295,7 @@ describe('S3 Service', () => {
           headers: {
             entries: () => [],
           },
+          text: () => Promise.resolve('Sync upload failed'),
         })
 
       const results = await s3Service.syncFrames(mockProjectId, framesToSync)

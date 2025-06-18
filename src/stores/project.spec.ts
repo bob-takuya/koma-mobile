@@ -35,6 +35,7 @@ describe('Project Store', () => {
       expect(store.error).toBeNull()
       expect(store.debugError).toBeNull()
       expect(store.bucketName).toBeNull()
+      expect(store.projectId).toBeNull()
     })
   })
 
@@ -67,6 +68,38 @@ describe('Project Store', () => {
 
       expect(store.bucketName).toBeNull()
       expect(localStorage.removeItem).toHaveBeenCalledWith('stopmotion-bucket-name')
+    })
+  })
+
+  describe('Project ID Management', () => {
+    it('should set project ID and save to localStorage', () => {
+      const store = useProjectStore()
+      const projectId = 'test-project-123'
+
+      store.setProjectId(projectId)
+
+      expect(store.projectId).toBe(projectId)
+      expect(localStorage.setItem).toHaveBeenCalledWith('stopmotion-project-id', projectId)
+    })
+
+    it('should load project ID from localStorage on init', () => {
+      const projectId = 'stored-project-456'
+      vi.mocked(localStorage.getItem).mockReturnValue(projectId)
+
+      const store = useProjectStore()
+      store.loadProjectId()
+
+      expect(store.projectId).toBe(projectId)
+    })
+
+    it('should clear project ID', () => {
+      const store = useProjectStore()
+      store.setProjectId('test-project')
+
+      store.clearProjectId()
+
+      expect(store.projectId).toBeNull()
+      expect(localStorage.removeItem).toHaveBeenCalledWith('stopmotion-project-id')
     })
   })
 

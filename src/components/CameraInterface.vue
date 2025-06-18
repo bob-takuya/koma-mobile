@@ -298,8 +298,12 @@ const downloadFrame = async () => {
         throw new Error('Bucket name not configured')
       }
       
+      if (!projectStore.projectId) {
+        throw new Error('Project ID not configured')
+      }
+      
       const s3Service = new S3Service(projectStore.bucketName)
-      blob = await s3Service.downloadImage('current-project', frameData.frame)
+      blob = await s3Service.downloadImage(projectStore.projectId, frameData.frame)
       console.log('Downloaded from S3:', { blobSize: blob.size, blobType: blob.type })
     }
 
@@ -358,8 +362,12 @@ const syncFrames = async () => {
     console.log('Creating S3Service with bucket:', projectStore.bucketName)
     const s3Service = new S3Service(projectStore.bucketName)
     
+    if (!projectStore.projectId) {
+      throw new Error('Project ID not configured')
+    }
+    
     console.log('Syncing frames:', pendingUploads.value.map(p => ({ frame: p.frame, blobSize: p.blob.size })))
-    const results = await s3Service.syncFrames('current-project', pendingUploads.value)
+    const results = await s3Service.syncFrames(projectStore.projectId, pendingUploads.value)
     
     console.log('Sync results:', results)
 
@@ -370,7 +378,7 @@ const syncFrames = async () => {
     // Update config on S3
     if (projectStore.config) {
       console.log('Updating config on S3...')
-      await s3Service.uploadConfig('current-project', projectStore.config)
+      await s3Service.uploadConfig(projectStore.projectId, projectStore.config)
       console.log('Config updated successfully')
     }
 
@@ -405,11 +413,11 @@ const syncFrames = async () => {
 }
 
 const loadFrameImage = async (frameNumber: number) => {
-  if (!projectStore.bucketName || frameImageCache.value.has(frameNumber)) return
+  if (!projectStore.bucketName || !projectStore.projectId || frameImageCache.value.has(frameNumber)) return
 
   try {
     const s3Service = new S3Service(projectStore.bucketName)
-    const blob = await s3Service.downloadImage('current-project', frameNumber)
+    const blob = await s3Service.downloadImage(projectStore.projectId, frameNumber)
     const url = URL.createObjectURL(blob)
     frameImageCache.value.set(frameNumber, url)
   } catch (err) {

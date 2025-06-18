@@ -21,7 +21,7 @@ const router = createRouter({
       component: () => import('../views/CameraView.vue'),
       beforeEnter: (to, from, next) => {
         const projectStore = useProjectStore()
-        if (!projectStore.hasBucketName) {
+        if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
           next('/setup')
         } else {
           next()
@@ -34,7 +34,7 @@ const router = createRouter({
       component: () => import('../views/GalleryView.vue'),
       beforeEnter: (to, from, next) => {
         const projectStore = useProjectStore()
-        if (!projectStore.hasBucketName) {
+        if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
           next('/setup')
         } else {
           next()
