@@ -38,6 +38,23 @@
             alt="Onion skin frame"
           />
         </div>
+
+        <!-- Central View Button (when frame is taken but not cached) -->
+        <div 
+          v-if="shouldShowViewButton" 
+          class="central-view-button"
+        >
+          <button
+            data-testid="central-view-button"
+            class="view-frame-button"
+            @click="loadAndDisplayFrame"
+          >
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>表示</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -100,16 +117,6 @@
             Overwrite
           </button>
 
-          <!-- Download Button -->
-          <button
-            v-if="getCurrentFrameData?.taken"
-            data-testid="download-button"
-            class="download-button secondary-button"
-            @click="downloadFrame"
-          >
-            Download
-          </button>
-
           <!-- Sync Button -->
           <button
             v-if="pendingUploads.length > 0"
@@ -135,7 +142,15 @@
 
     <!-- Error Message -->
     <div v-if="error" class="error-message">
-      {{ error }}
+      <div class="error-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+        {{ error }}
+      </div>
+      <button class="error-dismiss" @click="error = null">×</button>
     </div>
   </div>
 </template>
@@ -185,6 +200,19 @@ const frameImageUrl = computed(() => {
   return null
 })
 
+// キャッシュに存在するかチェック
+const isFrameCached = computed(() => {
+  const frameData = getCurrentFrameData.value
+  if (!frameData?.taken) return false
+  return frameImageCache.value.has(frameData.frame)
+})
+
+// 表示ボタンを表示するかチェック
+const shouldShowViewButton = computed(() => {
+  const frameData = getCurrentFrameData.value
+  return frameData?.taken && !isFrameCached.value && !showCamera.value
+})
+
 const onionSkinImages = computed(() => {
   if (!showOnionSkin.value || !projectStore.config) return []
 
@@ -219,15 +247,48 @@ const handleFrameChange = (event: Event) => {
 }
 
 const initializeCamera = async () => {
+  console.log('initializeCamera called, video element available:', !!videoElement.value)
+  
+  if (!videoElement.value) {
+    console.warn('Video element not available yet, waiting...')
+    await nextTick()
+    if (!videoElement.value) {
+      throw new Error('Video element is not available')
+    }
+  }
+
   try {
+    // 既存のストリームがあれば停止
+    if (videoElement.value.srcObject) {
+      const tracks = (videoElement.value.srcObject as MediaStream).getTracks()
+      tracks.forEach(track => track.stop())
+      videoElement.value.srcObject = null
+    }
+
+    console.log('Starting camera...')
     const stream = await cameraService.startCamera()
+    
     if (videoElement.value) {
       videoElement.value.srcObject = stream
+      
+      // videoの再生を確実にする
+      try {
+        await videoElement.value.play()
+        console.log('Video started playing successfully')
+      } catch (playError) {
+        console.warn('Video play failed, but stream is set:', playError)
+        // play()が失敗してもストリームは設定されているので続行
+      }
+      
       showCamera.value = true
+      console.log('Camera initialized successfully')
+    } else {
+      throw new Error('Video element became unavailable during initialization')
     }
   } catch (err) {
     console.error('Failed to initialize camera:', err)
-    error.value = 'Failed to access camera. Please check permissions.'
+    error.value = 'カメラへのアクセスに失敗しました。カメラの許可を確認してください。'
+    throw err
   }
 }
 
@@ -263,20 +324,61 @@ const captureFrame = async () => {
   }
 }
 
-const enableOverwrite = () => {
+const enableOverwrite = async () => {
   console.log('enableOverwrite called:', {
     currentFrame: currentFrame.value,
     frameData: getCurrentFrameData.value,
     showCamera: showCamera.value,
+    cameraActive: cameraService.isActive,
   })
 
-  showCamera.value = true
-  error.value = null // Clear any existing errors
+  try {
+    // カメラを停止してリセット
+    cameraService.stopCamera()
+    
+    // 状態をリセット
+    showCamera.value = true
+    error.value = null
+    
+    // キャッシュされた画像URLを削除
+    const cachedUrl = frameImageCache.value.get(currentFrame.value)
+    if (cachedUrl) {
+      URL.revokeObjectURL(cachedUrl)
+      frameImageCache.value.delete(currentFrame.value)
+    }
+    
+    // pending uploadsからも削除
+    const pendingIndex = pendingUploads.value.findIndex(p => p.frame === currentFrame.value)
+    if (pendingIndex >= 0) {
+      pendingUploads.value.splice(pendingIndex, 1)
+    }
 
-  nextTick(() => {
+    // フレームの状態をリセット（taken状態を解除）
+    if (projectStore.config) {
+      const frame = projectStore.config.frames.find(f => f.frame === currentFrame.value)
+      if (frame) {
+        frame.taken = false
+        frame.filename = null
+      }
+    }
+
+    // DOMが更新されるまで待機
+    await nextTick()
+    
+    // 少し待ってからカメラを初期化（他の処理が完了するまで）
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
     console.log('Initializing camera for overwrite...')
-    initializeCamera()
-  })
+    if (videoElement.value) {
+      await initializeCamera()
+      console.log('Camera initialized successfully for overwrite')
+    } else {
+      throw new Error('Video element not available for overwrite')
+    }
+  } catch (err) {
+    console.error('Failed to enable overwrite:', err)
+    error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+  }
 }
 
 const downloadFrame = async () => {
@@ -344,6 +446,150 @@ const downloadFrame = async () => {
       }
     } else {
       error.value = 'Failed to download frame.'
+    }
+  }
+}
+
+const viewFrame = async () => {
+  const frameData = getCurrentFrameData.value
+  console.log('viewFrame called:', {
+    frameData,
+    hasPendingUpload: !!pendingUploads.value.find((p) => p.frame === frameData?.frame),
+    bucketName: projectStore.bucketName,
+  })
+
+  if (!frameData?.taken || !frameData.filename) {
+    console.warn('Frame not taken or filename missing:', frameData)
+    error.value = 'フレームが利用できません。'
+    return
+  }
+
+  try {
+    let blob: Blob
+
+    // Try to get from pending uploads first
+    const pending = pendingUploads.value.find((p) => p.frame === frameData.frame)
+    if (pending) {
+      console.log('Using blob from pending uploads')
+      blob = pending.blob
+    } else {
+      console.log('Loading from S3...')
+      // Download from S3
+      if (!projectStore.bucketName) {
+        throw new Error('Bucket name not configured')
+      }
+
+      if (!projectStore.projectId) {
+        throw new Error('Project ID not configured')
+      }
+
+      const s3Service = new S3Service(projectStore.bucketName)
+      blob = await s3Service.downloadImage(projectStore.projectId, frameData.frame)
+      console.log('Loaded from S3:', { blobSize: blob.size, blobType: blob.type })
+    }
+
+    // Create URL and open in new tab/window for viewing
+    const url = URL.createObjectURL(blob)
+    const newWindow = window.open(url, '_blank')
+    
+    if (!newWindow) {
+      // If popup is blocked, show error
+      error.value = 'ポップアップがブロックされました。ブラウザの設定を確認してください。'
+      URL.revokeObjectURL(url)
+    } else {
+      // Clean up URL after a delay to ensure the image loads
+      setTimeout(() => {
+        URL.revokeObjectURL(url)
+      }, 1000)
+    }
+
+    console.log('View completed successfully')
+  } catch (err) {
+    console.error('Failed to view frame:', err)
+
+    // より詳細なエラーメッセージを提供
+    if (err instanceof Error) {
+      if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
+        error.value = 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
+      } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+        error.value = 'アクセスが拒否されました。権限設定を確認してください。'
+      } else if (err.message.includes('404') || err.message.includes('Not Found')) {
+        error.value = 'フレームがサーバーで見つかりません。'
+      } else {
+        error.value = `表示に失敗しました: ${err.message}`
+      }
+    } else {
+      error.value = 'フレームの表示に失敗しました。'
+    }
+  }
+}
+
+const loadAndDisplayFrame = async () => {
+  const frameData = getCurrentFrameData.value
+  console.log('loadAndDisplayFrame called:', {
+    frameData,
+    isAlreadyCached: isFrameCached.value,
+    bucketName: projectStore.bucketName,
+  })
+
+  if (!frameData?.taken || !frameData.filename) {
+    console.warn('Frame not taken or filename missing:', frameData)
+    error.value = 'フレームが利用できません。'
+    return
+  }
+
+  // 既にキャッシュされている場合は何もしない
+  if (isFrameCached.value) {
+    console.log('Frame already cached, no action needed')
+    return
+  }
+
+  try {
+    // pending uploadsから取得を試行
+    const pending = pendingUploads.value.find((p) => p.frame === frameData.frame)
+    if (pending) {
+      console.log('Using blob from pending uploads')
+      const url = URL.createObjectURL(pending.blob)
+      frameImageCache.value.set(frameData.frame, url)
+      console.log('Frame loaded from pending uploads successfully')
+      return
+    }
+
+    // S3から読み込み
+    console.log('Loading from S3...')
+    if (!projectStore.bucketName) {
+      throw new Error('Bucket name not configured')
+    }
+
+    if (!projectStore.projectId) {
+      throw new Error('Project ID not configured')
+    }
+
+    const s3Service = new S3Service(projectStore.bucketName)
+    const blob = await s3Service.downloadImage(projectStore.projectId, frameData.frame)
+    console.log('Loaded from S3:', { blobSize: blob.size, blobType: blob.type })
+
+    // キャッシュに保存
+    const url = URL.createObjectURL(blob)
+    frameImageCache.value.set(frameData.frame, url)
+    
+    console.log('Frame loaded and cached successfully')
+  } catch (err) {
+    console.error('Failed to load frame:', err)
+
+    // より詳細なエラーメッセージを提供
+    if (err instanceof Error) {
+      if (err.message.includes('NetworkError') || err.message.includes('fetch')) {
+        error.value = 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
+      } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+        error.value = 'アクセスが拒否されました。権限設定を確認してください。'
+      } else if (err.message.includes('404') || err.message.includes('Not Found')) {
+        error.value = 'フレームがサーバーで見つかりません。'
+      } else {
+        error.value = `読み込みに失敗しました: ${err.message}`
+      }
+    } else {
+      error.value = 'フレームの読み込みに失敗しました。'
     }
   }
 }
@@ -440,18 +686,41 @@ const loadFrameImage = async (frameNumber: number) => {
 }
 
 // Watchers
-watch(currentFrame, (newFrame, oldFrame) => {
-  if (newFrame !== oldFrame) {
-    const frameData = projectStore.config?.frames[newFrame]
-    if (frameData?.taken) {
-      showCamera.value = false
-    } else {
-      showCamera.value = true
-      nextTick(() => {
-        if (cameraService.isActive) {
-          initializeCamera()
+let isFrameChanging = false
+
+watch(currentFrame, async (newFrame, oldFrame) => {
+  if (newFrame !== oldFrame && !isFrameChanging) {
+    isFrameChanging = true
+    console.log('Frame changed from', oldFrame, 'to', newFrame)
+    
+    try {
+      const frameData = projectStore.config?.frames[newFrame]
+      
+      if (frameData?.taken) {
+        console.log('Frame is taken, showing image')
+        showCamera.value = false
+        // カメラを停止してリソースを解放
+        cameraService.stopCamera()
+      } else {
+        console.log('Frame is not taken, showing camera')
+        showCamera.value = true
+        
+        // 少し待ってからカメラ初期化を試行
+        await nextTick()
+        await new Promise(resolve => setTimeout(resolve, 200))
+        
+        if (videoElement.value && !cameraService.isActive) {
+          try {
+            console.log('Initializing camera for new frame...')
+            await initializeCamera()
+          } catch (err) {
+            console.error('Failed to reinitialize camera on frame change:', err)
+            error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+          }
         }
-      })
+      }
+    } finally {
+      isFrameChanging = false
     }
   }
 })
@@ -464,10 +733,28 @@ watch(() => projectStore.config, () => {
 }, { deep: true })
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
+  console.log('CameraInterface mounted')
+  
   const frameData = getCurrentFrameData.value
+  console.log('Current frame data on mount:', frameData)
+  
+  // DOMが完全に準備されるまで待機
+  await nextTick()
+  
   if (!frameData?.taken) {
-    initializeCamera()
+    console.log('Frame not taken, initializing camera')
+    try {
+      // 少し待ってからカメラを初期化
+      await new Promise(resolve => setTimeout(resolve, 100))
+      await initializeCamera()
+    } catch (err) {
+      console.error('Failed to initialize camera on mount:', err)
+      error.value = 'カメラの初期化に失敗しました。ページを再読み込みしてください。'
+    }
+  } else {
+    console.log('Frame already taken, not initializing camera')
+    showCamera.value = false
   }
   
   // 初期サイズ計算
@@ -534,6 +821,52 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.central-view-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+}
+
+.view-frame-button {
+  background: rgba(0, 122, 255, 0.9);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 20px 32px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 122, 255, 0.3);
+  min-width: 120px;
+}
+
+.view-frame-button:hover {
+  background: rgba(0, 122, 255, 1);
+  transform: scale(1.05);
+  box-shadow: 0 12px 48px rgba(0, 122, 255, 0.4);
+}
+
+.view-frame-button:active {
+  transform: scale(0.95);
+}
+
+.view-frame-button svg {
+  opacity: 0.9;
+}
+
+.view-frame-button span {
+  font-size: 16px;
+  letter-spacing: 0.5px;
 }
 
 .bottom-panel {
@@ -673,10 +1006,37 @@ onUnmounted(() => {
   transform: translateX(-50%);
   background: #ff3b30;
   color: white;
-  padding: 12px 20px;
   border-radius: 8px;
   font-size: 14px;
   z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 90vw;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.error-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  flex: 1;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 0 8px 8px 0;
+  transition: background-color 0.2s ease;
+}
+
+.error-dismiss:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 @media (max-height: 600px) {
@@ -691,6 +1051,21 @@ onUnmounted(() => {
   .primary-button,
   .secondary-button {
     padding: 8px 16px;
+    font-size: 14px;
+  }
+
+  .view-frame-button {
+    padding: 16px 24px;
+    font-size: 16px;
+    min-width: 100px;
+  }
+
+  .view-frame-button svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .view-frame-button span {
     font-size: 14px;
   }
 }
@@ -712,9 +1087,23 @@ onUnmounted(() => {
 
   .capture-button,
   .overwrite-button,
-  .download-button,
   .sync-button {
     padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .view-frame-button {
+    padding: 16px 24px;
+    font-size: 16px;
+    min-width: 100px;
+  }
+
+  .view-frame-button svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .view-frame-button span {
     font-size: 14px;
   }
 }
