@@ -18,13 +18,13 @@ vi.mock('vue-router', async () => {
 // Sample frame data for testing
 const sampleFrames: Frame[] = [
   {
-    number: 1,
+    number: 0,
     taken: true,
     filename: 'frame1.webp',
     notes: 'First frame',
   },
   {
-    number: 2,
+    number: 1,
     taken: true,
     filename: 'frame2.webp',
     notes: 'Second frame',
@@ -120,7 +120,8 @@ describe('GalleryView', () => {
 
   it('should select frames when clicked', async () => {
     const firstFrame = wrapper.find('.frame-item')
-    await firstFrame.trigger('click')
+    const firstCheckbox = firstFrame.find('.frame-checkbox')
+    await firstCheckbox.trigger('click')
 
     expect(wrapper.find('.frame-count').text()).toBe('1/2 選択中')
     expect(firstFrame.classes()).toContain('selected')
@@ -128,13 +129,14 @@ describe('GalleryView', () => {
 
   it('should deselect frames when clicked again', async () => {
     const firstFrame = wrapper.find('.frame-item')
+    const firstCheckbox = firstFrame.find('.frame-checkbox')
 
     // Select frame
-    await firstFrame.trigger('click')
+    await firstCheckbox.trigger('click')
     expect(firstFrame.classes()).toContain('selected')
 
     // Deselect frame
-    await firstFrame.trigger('click')
+    await firstCheckbox.trigger('click')
     expect(firstFrame.classes()).not.toContain('selected')
     expect(wrapper.find('.frame-count').text()).toBe('0/2 選択中')
   })
@@ -163,7 +165,8 @@ describe('GalleryView', () => {
   it('should clear selection when clear selection button is clicked', async () => {
     // First select all frames
     const firstFrame = wrapper.find('.frame-item')
-    await firstFrame.trigger('click')
+    const firstCheckbox = firstFrame.find('.frame-checkbox')
+    await firstCheckbox.trigger('click')
 
     expect(wrapper.find('.frame-count').text()).toBe('1/2 選択中')
 

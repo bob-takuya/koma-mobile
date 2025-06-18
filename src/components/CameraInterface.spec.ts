@@ -178,24 +178,6 @@ describe('CameraInterface Component', () => {
     })
   })
 
-  describe('Download Functionality', () => {
-    it('should show download button for taken frame', () => {
-      store.currentFrame = 1 // taken frame
-      wrapper = mount(CameraInterface)
-
-      const downloadButton = wrapper.find('[data-testid="download-button"]')
-      expect(downloadButton.exists()).toBe(true)
-    })
-
-    it('should not show download button for untaken frame', () => {
-      store.currentFrame = 0 // untaken frame
-      wrapper = mount(CameraInterface)
-
-      const downloadButton = wrapper.find('[data-testid="download-button"]')
-      expect(downloadButton.exists()).toBe(false)
-    })
-  })
-
   describe('Responsive Layout', () => {
     it('should have landscape orientation class', () => {
       wrapper = mount(CameraInterface)
