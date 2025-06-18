@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 // Mock the project store before importing the router
 vi.mock('../stores/project', () => ({
   useProjectStore: vi.fn(() => ({
-    hasApiKey: true,
+    hasBucketName: true,
   })),
 }))
 

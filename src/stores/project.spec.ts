@@ -1,7 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useProjectStore } from '@/stores/project'
+import { S3Service } from '@/services/s3'
 import type { ProjectConfig, Frame } from '@/types'
+
+// Mock the S3 service
+vi.mock('@/services/s3', () => ({
+  S3Service: vi.fn().mockImplementation(() => ({
+    downloadConfig: vi.fn(),
+    uploadConfig: vi.fn(),
+    downloadImage: vi.fn(),
+    uploadImage: vi.fn(),
+    checkProjectExists: vi.fn(),
+  })),
+}))
 
 describe('Project Store', () => {
   beforeEach(() => {
@@ -17,39 +29,40 @@ describe('Project Store', () => {
       expect(store.currentFrame).toBe(0)
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
-      expect(store.apiKey).toBeNull()
+      expect(store.debugError).toBeNull()
+      expect(store.bucketName).toBeNull()
     })
   })
 
-  describe('API Key Management', () => {
-    it('should set API key and save to localStorage', () => {
+  describe('Bucket Name Management', () => {
+    it('should set bucket name and save to localStorage', () => {
       const store = useProjectStore()
-      const apiKey = 'test-api-key-123'
+      const bucketName = 'test-bucket-name-123'
 
-      store.setApiKey(apiKey)
+      store.setBucketName(bucketName)
 
-      expect(store.apiKey).toBe(apiKey)
-      expect(localStorage.setItem).toHaveBeenCalledWith('stopmotion-api-key', apiKey)
+      expect(store.bucketName).toBe(bucketName)
+      expect(localStorage.setItem).toHaveBeenCalledWith('stopmotion-bucket-name', bucketName)
     })
 
-    it('should load API key from localStorage on init', () => {
-      const apiKey = 'stored-api-key-456'
-      vi.mocked(localStorage.getItem).mockReturnValue(apiKey)
+    it('should load bucket name from localStorage on init', () => {
+      const bucketName = 'stored-bucket-name-456'
+      vi.mocked(localStorage.getItem).mockReturnValue(bucketName)
 
       const store = useProjectStore()
-      store.loadApiKey()
+      store.loadBucketName()
 
-      expect(store.apiKey).toBe(apiKey)
+      expect(store.bucketName).toBe(bucketName)
     })
 
-    it('should clear API key', () => {
+    it('should clear bucket name', () => {
       const store = useProjectStore()
-      store.setApiKey('test-key')
+      store.setBucketName('test-bucket')
 
-      store.clearApiKey()
+      store.clearBucketName()
 
-      expect(store.apiKey).toBeNull()
-      expect(localStorage.removeItem).toHaveBeenCalledWith('stopmotion-api-key')
+      expect(store.bucketName).toBeNull()
+      expect(localStorage.removeItem).toHaveBeenCalledWith('stopmotion-bucket-name')
     })
   })
 
@@ -65,31 +78,93 @@ describe('Project Store', () => {
         ],
       }
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockConfig),
-      } as Response)
+      const mockS3Service = {
+        checkProjectExists: vi.fn().mockResolvedValue(true),
+        downloadConfig: vi.fn().mockResolvedValue(mockConfig),
+        uploadConfig: vi.fn(),
+        downloadImage: vi.fn(),
+        uploadImage: vi.fn(),
+      }
+
+      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
 
       const store = useProjectStore()
-      store.setApiKey('test-key')
+      store.setBucketName('test-bucket')
 
       await store.loadConfig('test-project')
 
+      expect(mockS3Service.checkProjectExists).toHaveBeenCalledWith('test-project')
+      expect(mockS3Service.downloadConfig).toHaveBeenCalledWith('test-project')
       expect(store.config).toEqual(mockConfig)
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
     })
 
-    it('should handle config loading errors', async () => {
-      vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'))
+    it('should handle project not found error', async () => {
+      const mockS3Service = {
+        checkProjectExists: vi.fn().mockResolvedValue(false),
+        downloadConfig: vi.fn(),
+        uploadConfig: vi.fn(),
+        downloadImage: vi.fn(),
+        uploadImage: vi.fn(),
+      }
+
+      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
 
       const store = useProjectStore()
-      store.setApiKey('test-key')
+      store.setBucketName('test-bucket')
+
+      await store.loadConfig('non-existent-project')
+
+      expect(mockS3Service.checkProjectExists).toHaveBeenCalledWith('non-existent-project')
+      expect(mockS3Service.downloadConfig).not.toHaveBeenCalled()
+      expect(store.config).toBeNull()
+      expect(store.error).toBe('Project not found. Please check the project ID.')
+      expect(store.debugError).toContain('Project check failed for: non-existent-project')
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('should handle config loading errors', async () => {
+      const mockS3Service = {
+        checkProjectExists: vi.fn().mockResolvedValue(true),
+        downloadConfig: vi.fn().mockRejectedValue(new Error('Network error')),
+        uploadConfig: vi.fn(),
+        downloadImage: vi.fn(),
+        uploadImage: vi.fn(),
+      }
+
+      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
+
+      const store = useProjectStore()
+      store.setBucketName('test-bucket')
 
       await store.loadConfig('test-project')
 
       expect(store.config).toBeNull()
-      expect(store.error).toBe('Failed to load project config')
+      expect(store.error).toBe('Failed to load project config. Please check your connection and try again.')
+      expect(store.debugError).toContain('Error details: Network error')
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('should handle bucket not found error', async () => {
+      const mockS3Service = {
+        checkProjectExists: vi.fn().mockRejectedValue({ name: 'NoSuchBucket' }),
+        downloadConfig: vi.fn(),
+        uploadConfig: vi.fn(),
+        downloadImage: vi.fn(),
+        uploadImage: vi.fn(),
+      }
+
+      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
+
+      const store = useProjectStore()
+      store.setBucketName('non-existent-bucket')
+
+      await store.loadConfig('test-project')
+
+      expect(store.config).toBeNull()
+      expect(store.error).toBe('S3 bucket not found. Please check the bucket name.')
+      expect(store.debugError).toContain('Error name: NoSuchBucket')
       expect(store.isLoading).toBe(false)
     })
 
@@ -101,23 +176,25 @@ describe('Project Store', () => {
         frames: [],
       }
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-      } as Response)
+      const mockS3Service = {
+        checkProjectExists: vi.fn(),
+        downloadConfig: vi.fn(),
+        uploadConfig: vi.fn().mockResolvedValue(undefined),
+        downloadImage: vi.fn(),
+        uploadImage: vi.fn(),
+      }
+
+      vi.mocked(S3Service).mockImplementation(() => mockS3Service as any)
 
       const store = useProjectStore()
-      store.setApiKey('test-key')
+      store.setBucketName('test-bucket')
       store.config = mockConfig
 
       await store.saveConfig('test-project')
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('config.json'),
-        expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify(mockConfig),
-        }),
-      )
+      expect(mockS3Service.uploadConfig).toHaveBeenCalledWith('test-project', mockConfig)
+      expect(store.error).toBeNull()
+      expect(store.isLoading).toBe(false)
     })
   })
 

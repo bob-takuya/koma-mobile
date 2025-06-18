@@ -13,7 +13,7 @@ const viewMode = ref<'grid' | 'list'>('grid')
 
 // API キーが設定されていない場合はセットアップページに戻る
 onMounted(() => {
-  if (!projectStore.hasApiKey) {
+  if (!projectStore.hasBucketName) {
     router.push('/setup')
   }
 })

@@ -8,11 +8,11 @@ const projectStore = useProjectStore()
 
 // アプリケーション起動時に適切なページにリダイレクト
 onMounted(() => {
-  if (projectStore.hasApiKey) {
-    // API キーが設定済みの場合はカメラページへ
+  if (projectStore.hasBucketName) {
+    // バケット名が設定済みの場合はカメラページへ
     router.push('/camera')
   } else {
-    // API キーが未設定の場合はセットアップページへ
+    // バケット名が未設定の場合はセットアップページへ
     router.push('/setup')
   }
 })
@@ -30,7 +30,7 @@ onMounted(() => {
 <style scoped>
 .home-view {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #000000;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -16,7 +16,7 @@ vi.mock('vue-router', async () => {
 
 // Mock the project store
 const mockProjectStore = {
-  hasApiKey: true,
+  hasBucketName: true,
 }
 vi.mock('../stores/project', () => ({
   useProjectStore: () => mockProjectStore,
@@ -50,15 +50,15 @@ describe('HomeView', () => {
     expect(homeView.classes()).toContain('home-view')
   })
 
-  it('should redirect to camera when API key is available', () => {
+  it('should redirect to camera when bucket name is available', () => {
     // The onMounted hook should have been called during mount
-    // Since we mocked hasApiKey to true, it should redirect to camera
+    // Since we mocked hasBucketName to true, it should redirect to camera
     expect(mockPush).toHaveBeenCalledWith('/camera')
   })
 
-  it('should redirect to setup when API key is not available', async () => {
-    // Change mock to simulate no API key
-    mockProjectStore.hasApiKey = false
+  it('should redirect to setup when bucket name is not available', async () => {
+    // Change mock to simulate no bucket name
+    mockProjectStore.hasBucketName = false
 
     // Remount component to trigger onMounted again
     wrapper.unmount()
@@ -107,12 +107,12 @@ describe('HomeView', () => {
     expect(loadingContainer.classes()).toContain('loading-container')
   })
 
-  it('should handle API key state changes appropriately', () => {
+  it('should handle bucket name state changes appropriately', () => {
     // This test verifies that the component responds to store state
     expect(wrapper.vm).toBeDefined()
 
-    // The redirect logic should be based on the current API key state
-    if (mockProjectStore.hasApiKey) {
+    // The redirect logic should be based on the current bucket name state
+    if (mockProjectStore.hasBucketName) {
       expect(mockPush).toHaveBeenCalledWith('/camera')
     } else {
       expect(mockPush).toHaveBeenCalledWith('/setup')

@@ -15,6 +15,8 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  background: #000000;
+  color: #ffffff;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -26,12 +28,13 @@ body {
   height: 100vh;
   position: relative;
   overflow: hidden;
+  background: #000000;
 }
 
 .stop-motion-app {
   width: 100%;
   height: 100%;
-  background: #f8f9fa;
+  background: #000000;
 }
 
 /* Global mobile optimizations */

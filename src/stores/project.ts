@@ -1,6 +1,89 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { ProjectConfig } from '@/types'
+import { S3Service } from '@/services/s3'
+import type { ProjectConfig, Frame } from '@/types'
+
+// 直接HTTPアクセス用のサービス
+class S3DirectService {
+  private bucketName: string
+  private region: string
+  private configCache: Map<string, { data: ProjectConfig; timestamp: number }> = new Map()
+
+  constructor(bucketName: string, region: string = 'ap-northeast-1') {
+    this.bucketName = bucketName
+    this.region = region
+    
+    console.log('S3DirectService initialized for anonymous access:', {
+      bucketName: this.bucketName,
+      region: this.region,
+      method: 'direct-http'
+    })
+  }
+
+  private getS3Url(key: string): string {
+    return `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
+  }
+
+  async downloadConfig(projectId: string): Promise<ProjectConfig> {
+    const key = `projects/${projectId}/config.json`
+    const url = this.getS3Url(key)
+    console.log('Downloading config via direct HTTP:', { projectId, key, url })
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        mode: 'cors'
+      })
+
+      console.log('Direct HTTP response received:', {
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Project not found')
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const text = await response.text()
+      const data = JSON.parse(text)
+      console.log('Config parsed successfully:', data)
+
+      return data
+    } catch (error: any) {
+      console.error('S3 direct HTTP downloadConfig error:', error)
+      throw error
+    }
+  }
+
+  async checkProjectExists(projectId: string): Promise<boolean> {
+    const key = `projects/${projectId}/config.json`
+    const url = this.getS3Url(key)
+    console.log('Checking project existence via direct HTTP:', { projectId, key, url })
+
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        mode: 'cors'
+      })
+
+      console.log('Project exists check response:', {
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      return response.status === 200
+        } catch (error: any) {
+      console.error('S3 direct HTTP checkProjectExists error:', error)
+      throw error
+    }
+  }
+}
 
 export const useProjectStore = defineStore('project', () => {
   // State
@@ -8,7 +91,8 @@ export const useProjectStore = defineStore('project', () => {
   const currentFrame = ref(0)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const apiKey = ref<string | null>(null)
+  const debugError = ref<string | null>(null) // デバッグ用の詳細エラー
+  const bucketName = ref<string | null>(null)
 
   // Getters
   const getCurrentFrameData = computed(() => {
@@ -31,26 +115,26 @@ export const useProjectStore = defineStore('project', () => {
     return config.value?.totalFrames || 0
   })
 
-  const hasApiKey = computed(() => {
-    return !!apiKey.value
+  const hasBucketName = computed(() => {
+    return !!bucketName.value
   })
 
   // Actions
-  function setApiKey(key: string) {
-    apiKey.value = key
-    localStorage.setItem('stopmotion-api-key', key)
+  function setBucketName(name: string) {
+    bucketName.value = name
+    localStorage.setItem('stopmotion-bucket-name', name)
   }
 
-  function loadApiKey() {
-    const storedKey = localStorage.getItem('stopmotion-api-key')
-    if (storedKey) {
-      apiKey.value = storedKey
+  function loadBucketName() {
+    const storedName = localStorage.getItem('stopmotion-bucket-name')
+    if (storedName) {
+      bucketName.value = storedName
     }
   }
 
-  function clearApiKey() {
-    apiKey.value = null
-    localStorage.removeItem('stopmotion-api-key')
+  function clearBucketName() {
+    bucketName.value = null
+    localStorage.removeItem('stopmotion-bucket-name')
   }
 
   function setCurrentFrame(frameNumber: number) {
@@ -71,40 +155,72 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function loadConfig(projectId: string) {
-    if (!apiKey.value) {
-      error.value = 'API key required'
+    if (!bucketName.value) {
+      error.value = 'Bucket name required'
+      debugError.value = null
       return
     }
 
     isLoading.value = true
     error.value = null
+    debugError.value = null
 
     try {
-      const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
-      const response = await fetch(`${baseURL}/projects/${projectId}/config.json`, {
-        headers: {
-          Authorization: `Bearer ${apiKey.value}`,
-          'Cache-Control': 'max-age=60', // 1分間のキャッシュ
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      const s3Service = new S3DirectService(bucketName.value)
+      
+      // まずプロジェクトの存在をチェック
+      const projectExists = await s3Service.checkProjectExists(projectId)
+      if (!projectExists) {
+        error.value = 'Project not found. Please check the project ID.'
+        debugError.value = `Project check failed for: ${projectId} in bucket: ${bucketName.value}`
+        return
       }
 
-      const data = await response.json()
+      // プロジェクトが存在する場合、configをダウンロード
+      const data = await s3Service.downloadConfig(projectId)
       config.value = data
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load config:', err)
-      error.value = 'Failed to load project config'
+      
+      // デバッグ情報を保存
+      const errorDetails = {
+        message: err.message || 'Unknown error',
+        name: err.name || 'Unknown',
+        code: err.code || 'None',
+        stack: err.stack || 'No stack trace',
+        metadata: err.$metadata || 'No metadata',
+        originalError: err.originalError || 'No original error'
+      }
+      
+      debugError.value = `Error details: ${errorDetails.message}\nError name: ${errorDetails.name}\nError code: ${errorDetails.code}\nMetadata: ${JSON.stringify(errorDetails.metadata, null, 2)}\nStack: ${errorDetails.stack}`
+      
+      if (err.message === 'Project not found') {
+        error.value = 'Project not found. Please check the project ID.'
+      } else if (err.name === 'CORSError' || err.code === 'CORS_OR_NETWORK') {
+        error.value = 'Network request failed. Check your internet connection and S3 configuration.'
+      } else if (err.name === 'NoSuchBucket') {
+        error.value = 'S3 bucket not found. Please check the bucket name.'
+      } else if (err.name === 'AccessDenied' || err.code === 'AccessDenied') {
+        error.value = 'Access denied. Please check your AWS credentials and bucket permissions.'
+      } else if (err.name === 'CredentialsError' || err.message?.includes('credentials')) {
+        error.value = 'AWS credentials not found or invalid. Please configure your AWS credentials.'
+      } else if (err.name === 'NetworkError' || err.message?.includes('network')) {
+        error.value = 'Network error. Please check your internet connection.'
+      } else if (err.message?.includes('CORS')) {
+        error.value = 'CORS error. S3 bucket CORS configuration may be incorrect.'
+      } else if (err.message?.includes('fetch')) {
+        error.value = 'Network request failed. Check your internet connection and S3 configuration.'
+      } else {
+        error.value = 'Failed to load project config. Please check your connection and try again.'
+      }
     } finally {
       isLoading.value = false
     }
   }
 
   async function saveConfig(projectId: string) {
-    if (!apiKey.value || !config.value) {
-      error.value = 'API key and config required'
+    if (!bucketName.value || !config.value) {
+      error.value = 'Bucket name and config required'
       return
     }
 
@@ -112,18 +228,8 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/config.json`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${apiKey.value}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config.value),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      const s3Service = new S3Service(bucketName.value)
+      await s3Service.uploadConfig(projectId, config.value)
     } catch (err) {
       console.error('Failed to save config:', err)
       error.value = 'Failed to save project config'
@@ -138,16 +244,17 @@ export const useProjectStore = defineStore('project', () => {
     currentFrame,
     isLoading,
     error,
-    apiKey,
+    debugError,
+    bucketName,
     // Getters
     getCurrentFrameData,
     takenFramesCount,
     totalFrames,
-    hasApiKey,
+    hasBucketName,
     // Actions
-    setApiKey,
-    loadApiKey,
-    clearApiKey,
+    setBucketName,
+    loadBucketName,
+    clearBucketName,
     setCurrentFrame,
     markFrameTaken,
     loadConfig,

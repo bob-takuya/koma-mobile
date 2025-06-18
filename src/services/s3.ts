@@ -1,3 +1,4 @@
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import type { ProjectConfig } from '@/types'
 
 export interface SyncResult {
@@ -12,30 +13,60 @@ export interface FrameToSync {
 }
 
 export class S3Service {
-  private apiKey: string
-  private baseURL: string
+  private bucketName: string
+  private region: string
+  private s3Client: S3Client
   private configCache: Map<string, { data: ProjectConfig; timestamp: number }> = new Map()
   private imageCache: Map<string, { blob: Blob; timestamp: number }> = new Map()
 
-  constructor(apiKey: string, baseURL?: string) {
-    this.apiKey = apiKey
-    this.baseURL = baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+  constructor(bucketName: string, region: string = 'ap-northeast-1') {
+    this.bucketName = bucketName
+    this.region = region
+    
+    // パブリックアクセス用のS3Client設定
+    this.s3Client = new S3Client({
+      region,
+      // 完全匿名アクセス：認証情報を指定しない
+      // パブリックアクセス用の設定
+      forcePathStyle: false,
+      useAccelerateEndpoint: false,
+      maxAttempts: 3,
+      requestHandler: {
+        requestTimeout: 30000
+      },
+      // 追加の匿名アクセス設定
+      tls: true,
+      apiVersion: '2006-03-01',
+      // CORS設定
+      useGlobalEndpoint: false,
+      disableHostPrefix: false
+    })
+    
+    // デバッグ用：認証情報の確認
+    console.log('S3Client initialized for anonymous access:', {
+      bucketName: this.bucketName,
+      region,
+      anonymousAccess: true,
+      credentialsType: 'anonymous',
+      userAgent: navigator.userAgent,
+      location: window.location.href
+    })
   }
 
   async uploadConfig(projectId: string, config: ProjectConfig): Promise<void> {
-    const url = this.getConfigUrl(projectId)
+    const key = `projects/${projectId}/config.json`
 
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(config),
-    })
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Body: JSON.stringify(config),
+        ContentType: 'application/json',
+      })
 
-    if (!response.ok) {
-      throw new Error(`Failed to upload config: ${response.status}`)
+      await this.s3Client.send(command)
+    } catch (error) {
+      throw new Error(`Failed to upload config: ${error}`)
     }
   }
 
@@ -46,47 +77,119 @@ export class S3Service {
 
     // キャッシュチェック
     if (cached && Date.now() - cached.timestamp < configCacheTTL) {
+      console.log('Using cached config for project:', projectId)
       return cached.data
     }
 
-    const url = this.getConfigUrl(projectId)
+    const key = `projects/${projectId}/config.json`
+    const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
+    console.log('Downloading config via direct HTTP:', { projectId, key, url })
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Cache-Control': 'max-age=60', // 1分間のキャッシュ
-      },
-    })
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        mode: 'cors'
+      })
 
-    if (!response.ok) {
-      throw new Error(`Failed to download config: ${response.status}`)
+      console.log('Direct HTTP response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      })
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Project not found')
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const text = await response.text()
+      const data = JSON.parse(text)
+      console.log('Config parsed successfully:', data)
+
+      // キャッシュに保存
+      this.configCache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+      })
+
+      return data
+    } catch (error: any) {
+      console.error('S3 direct HTTP downloadConfig error:', error)
+      
+      // プロジェクトが存在しない場合のエラーを特別に処理
+      if (error.message === 'Project not found') {
+        throw error
+      }
+      
+      // その他のエラー
+      const enhancedError = new Error(`Failed to download config: ${error.message || error}`) as any
+      enhancedError.name = error.name || 'HTTPError'
+      enhancedError.code = error.code || 'UNKNOWN'
+      enhancedError.originalError = error
+      throw enhancedError
     }
+  }
 
-    const data = await response.json()
+  async checkProjectExists(projectId: string): Promise<boolean> {
+    const key = `projects/${projectId}/config.json`
+    const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
+    console.log('Checking project existence via direct HTTP:', { projectId, key, url })
 
-    // キャッシュに保存
-    this.configCache.set(cacheKey, {
-      data,
-      timestamp: Date.now(),
-    })
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        mode: 'cors'
+      })
 
-    return data
+      console.log('Project exists check response:', {
+        status: response.status,
+        statusText: response.statusText
+      })
+
+      return response.status === 200
+    } catch (error: any) {
+      console.error('S3 direct HTTP checkProjectExists error:', error)
+      
+      // ネットワークエラーの場合
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        const enhancedError = new Error('Network error - check your internet connection and S3 bucket CORS configuration') as any
+        enhancedError.name = 'NetworkError'
+        enhancedError.code = 'NETWORK'
+        enhancedError.originalError = error
+        throw enhancedError
+      }
+      
+      // その他のエラー
+      const enhancedError = new Error(`Failed to check project existence: ${error.message || error}`) as any
+      enhancedError.name = error.name || 'HTTPError'
+      enhancedError.code = error.code || 'UNKNOWN'
+      enhancedError.originalError = error
+      throw enhancedError
+    }
   }
 
   async uploadImage(projectId: string, frameNumber: number, blob: Blob): Promise<void> {
-    const url = this.getImageUrl(projectId, frameNumber)
+    const key = `projects/${projectId}/${this.getFrameFilename(frameNumber)}`
 
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'image/webp',
-      },
-      body: blob,
-    })
+    try {
+      const arrayBuffer = await blob.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
 
-    if (!response.ok) {
-      throw new Error(`Failed to upload image: ${response.status}`)
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Body: uint8Array,
+        ContentType: 'image/webp',
+      })
+
+      await this.s3Client.send(command)
+    } catch (error) {
+      throw new Error(`Failed to upload image: ${error}`)
     }
   }
 
@@ -100,28 +203,31 @@ export class S3Service {
       return cached.blob
     }
 
-    const url = this.getImageUrl(projectId, frameNumber)
+    const key = `projects/${projectId}/${this.getFrameFilename(frameNumber)}`
+    const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Cache-Control': 'max-age=3600', // 1時間のキャッシュ
-      },
-    })
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        mode: 'cors'
+      })
 
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.status}`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+
+      // キャッシュに保存
+      this.imageCache.set(cacheKey, {
+        blob,
+        timestamp: Date.now(),
+      })
+
+      return blob
+    } catch (error) {
+      throw new Error(`Failed to download image: ${error}`)
     }
-
-    const blob = await response.blob()
-
-    // キャッシュに保存
-    this.imageCache.set(cacheKey, {
-      blob,
-      timestamp: Date.now(),
-    })
-
-    return blob
   }
 
   async syncFrames(projectId: string, frames: FrameToSync[]): Promise<SyncResult[]> {
@@ -148,19 +254,6 @@ export class S3Service {
 
   getFrameFilename(frameNumber: number): string {
     return `frame_${frameNumber.toString().padStart(4, '0')}.webp`
-  }
-
-  getConfigUrl(projectId: string): string {
-    return `${this.baseURL}/projects/${projectId}/config.json`
-  }
-
-  getImageUrl(projectId: string, frameNumber: number): string {
-    const filename = this.getFrameFilename(frameNumber)
-    return `${this.baseURL}/projects/${projectId}/${filename}`
-  }
-
-  updateApiKey(apiKey: string): void {
-    this.apiKey = apiKey
   }
 
   clearCache(): void {

@@ -273,7 +273,7 @@ const downloadFrame = async () => {
       blob = pending.blob
     } else {
       // Download from S3
-      const s3Service = new S3Service(projectStore.apiKey!)
+      const s3Service = new S3Service(projectStore.bucketName!)
       blob = await s3Service.downloadImage('current-project', frameData.frame)
     }
 
@@ -293,13 +293,13 @@ const downloadFrame = async () => {
 }
 
 const syncFrames = async () => {
-  if (pendingUploads.value.length === 0 || !projectStore.apiKey) return
+  if (pendingUploads.value.length === 0 || !projectStore.bucketName) return
 
   isSyncing.value = true
   error.value = null
 
   try {
-    const s3Service = new S3Service(projectStore.apiKey)
+    const s3Service = new S3Service(projectStore.bucketName)
     const results = await s3Service.syncFrames('current-project', pendingUploads.value)
 
     // Remove successfully uploaded frames from pending
@@ -324,10 +324,10 @@ const syncFrames = async () => {
 }
 
 const loadFrameImage = async (frameNumber: number) => {
-  if (!projectStore.apiKey || frameImageCache.value.has(frameNumber)) return
+  if (!projectStore.bucketName || frameImageCache.value.has(frameNumber)) return
 
   try {
-    const s3Service = new S3Service(projectStore.apiKey)
+    const s3Service = new S3Service(projectStore.bucketName)
     const blob = await s3Service.downloadImage('current-project', frameNumber)
     const url = URL.createObjectURL(blob)
     frameImageCache.value.set(frameNumber, url)

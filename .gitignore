@@ -46,3 +46,8 @@ workbox-*.js.map
 # Temporary files
 *.tmp
 *.temp
+
+# Backup and old files
+*.backup
+*-old-*.ts
+*-old.ts

@@ -33,7 +33,7 @@ const sampleFrames: Frame[] = [
 
 // Mock the project store
 const mockProjectStore = {
-  hasApiKey: true,
+  hasBucketName: true,
   config: {
     totalFrames: 2,
     fps: 12,

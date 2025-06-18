@@ -16,7 +16,7 @@ vi.mock('vue-router', async () => {
 
 // Mock the project store
 const mockProjectStore = {
-  hasApiKey: true,
+  hasBucketName: true,
 }
 vi.mock('../stores/project', () => ({
   useProjectStore: () => mockProjectStore,
@@ -153,7 +153,7 @@ describe('CameraView', () => {
     expect(cameraView.classes()).toContain('camera-view')
   })
 
-  it('should redirect to setup if no API key is available', () => {
+  it('should redirect to setup if no bucket name is available', () => {
     // This test simulates the onMounted behavior
     // The actual redirect logic is tested through the route guard
 

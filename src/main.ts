@@ -12,9 +12,9 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 
-// Initialize the project store and load any saved API key
+// Initialize the project store and load any saved bucket name
 const projectStore = useProjectStore()
-projectStore.loadApiKey()
+projectStore.loadBucketName()
 
 app.mount('#app')
 

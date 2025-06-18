@@ -21,7 +21,7 @@ const router = createRouter({
       component: () => import('../views/CameraView.vue'),
       beforeEnter: (to, from, next) => {
         const projectStore = useProjectStore()
-        if (!projectStore.hasApiKey) {
+        if (!projectStore.hasBucketName) {
           next('/setup')
         } else {
           next()
@@ -34,12 +34,17 @@ const router = createRouter({
       component: () => import('../views/GalleryView.vue'),
       beforeEnter: (to, from, next) => {
         const projectStore = useProjectStore()
-        if (!projectStore.hasApiKey) {
+        if (!projectStore.hasBucketName) {
           next('/setup')
         } else {
           next()
         }
       },
+    },
+    {
+      path: '/test',
+      name: 'test',
+      component: () => import('../views/TestView.vue'),
     },
     // 未知のルートは全てホームにリダイレクト
     {
