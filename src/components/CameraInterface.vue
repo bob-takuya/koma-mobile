@@ -11,7 +11,7 @@
       >
         <!-- カメラプレビュー（実際のvideoストリーム） -->
         <video
-          v-if="showCamera && !getCurrentFrameData?.taken && !isCameraInitializing && videoElement"
+          v-if="showCamera && !getCurrentFrameData?.taken"
           ref="videoElement"
           data-testid="camera-preview"
           class="camera-preview"
@@ -30,12 +30,12 @@
         />
 
         <!-- カメラ初期化中のローディング -->
-        <div v-else-if="showCamera && !getCurrentFrameData?.taken && isCameraInitializing" class="camera-loading">
+        <div v-if="showCamera && !getCurrentFrameData?.taken && isCameraInitializing" class="camera-loading">
           <p>カメラを初期化中...</p>
         </div>
         
         <!-- その他の状態（フォールバック） -->
-        <div v-else-if="showCamera && !getCurrentFrameData?.taken" class="camera-loading">
+        <div v-if="showCamera && !getCurrentFrameData?.taken && !isCameraInitializing && !videoElement?.srcObject" class="camera-loading">
           <p>カメラの準備中...</p>
         </div>
 
