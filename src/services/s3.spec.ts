@@ -42,14 +42,29 @@ describe('S3 Service', () => {
         frames: [{ frame: 0, taken: false, filename: null, note: 'Start' }],
       }
 
-      const mockS3Client = {
-        send: vi.fn().mockResolvedValue({}),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock successful fetch response for PUT request
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          entries: () => [['content-type', 'application/json']],
+        },
+      })
 
       await s3Service.uploadConfig(mockProjectId, mockConfig)
 
-      expect(mockS3Client.send).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(`projects/${mockProjectId}/config.json`),
+        expect.objectContaining({
+          method: 'PUT',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(mockConfig, null, 2),
+        }),
+      )
     })
 
     it('should download config from S3', async () => {
@@ -155,14 +170,31 @@ describe('S3 Service', () => {
       const mockBlob = new Blob(['fake-image-data'], { type: 'image/webp' })
       const frameNumber = 5
 
-      const mockS3Client = {
-        send: vi.fn().mockResolvedValue({}),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock successful fetch response for PUT request
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          entries: () => [['content-type', 'image/webp']],
+        },
+      })
 
       await s3Service.uploadImage(mockProjectId, frameNumber, mockBlob)
 
-      expect(mockS3Client.send).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `projects/${mockProjectId}/frame_${frameNumber.toString().padStart(4, '0')}.webp`,
+        ),
+        expect.objectContaining({
+          method: 'PUT',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'image/webp',
+          },
+          body: mockBlob,
+        }),
+      )
     })
 
     it('should download image from S3', async () => {
@@ -195,10 +227,15 @@ describe('S3 Service', () => {
     it('should handle image upload errors', async () => {
       const mockBlob = new Blob(['fake-image-data'], { type: 'image/webp' })
 
-      const mockS3Client = {
-        send: vi.fn().mockRejectedValue(new Error('S3 error')),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock failed fetch response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: {
+          entries: () => [],
+        },
+      })
 
       await expect(s3Service.uploadImage(mockProjectId, 1, mockBlob)).rejects.toThrow(
         'Failed to upload image',
@@ -222,10 +259,24 @@ describe('S3 Service', () => {
         { frame: 1, blob: new Blob(['data1']) },
       ]
 
-      const mockS3Client = {
-        send: vi.fn().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('S3 error')),
-      }
-      ;(s3Service as any).s3Client = mockS3Client
+      // Mock first upload success, second upload failure
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            entries: () => [],
+          },
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          headers: {
+            entries: () => [],
+          },
+        })
 
       const results = await s3Service.syncFrames(mockProjectId, framesToSync)
 
