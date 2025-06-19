@@ -196,6 +196,34 @@ export const useProjectStore = defineStore('project', () => {
     })
   }
 
+  function updateFrameCount(newFrameCount: number) {
+    if (!config.value || newFrameCount <= 0 || newFrameCount > 1000) return
+
+    const oldFrameCount = config.value.totalFrames
+    config.value.totalFrames = newFrameCount
+
+    // フレーム配列を調整
+    if (newFrameCount > oldFrameCount) {
+      // フレームを追加
+      for (let i = oldFrameCount; i < newFrameCount; i++) {
+        config.value.frames.push({
+          number: i,
+          taken: false,
+          filename: null,
+          notes: '',
+        })
+      }
+    } else if (newFrameCount < oldFrameCount) {
+      // フレームを削除（最後から）
+      config.value.frames = config.value.frames.slice(0, newFrameCount)
+      
+      // 現在のフレームが範囲外になった場合は調整
+      if (currentFrame.value >= newFrameCount) {
+        currentFrame.value = Math.max(0, newFrameCount - 1)
+      }
+    }
+  }
+
   async function loadConfig(projectId: string) {
     if (!bucketName.value) {
       error.value = 'Bucket name required'
@@ -314,6 +342,7 @@ export const useProjectStore = defineStore('project', () => {
     setCurrentFrame,
     markFrameTaken,
     deleteFrames,
+    updateFrameCount,
     loadConfig,
     saveConfig,
   }

@@ -15,6 +15,25 @@ const viewMode = ref<'grid' | 'list'>('grid')
 const frameImageCache = ref<Map<number, string>>(new Map())
 const loadingImages = ref<Set<number>>(new Set())
 
+// ダウンロード機能のstate
+const showDownloadDialog = ref(false)
+const downloadStartFrame = ref(0)
+const downloadEndFrame = ref(0)
+const isDownloading = ref(false)
+
+// フレーム数変更機能のstate
+const showFrameCountDialog = ref(false)
+const newFrameCount = ref(30)
+const isUpdatingFrameCount = ref(false)
+
+// プレビュー機能のstate
+const showPreviewDialog = ref(false)
+const previewFps = ref(12)
+const isPlaying = ref(false)
+const currentPreviewFrame = ref(0)
+const previewImages = ref<string[]>([])
+const isLoadingPreview = ref(false)
+
 // API キーが設定されていない場合はセットアップページに戻る
 onMounted(() => {
   if (!projectStore.hasBucketName || !projectStore.hasProjectId) {
@@ -192,6 +211,192 @@ const toggleViewMode = () => {
   viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
 }
 
+// ダウンロード機能
+const openDownloadDialog = () => {
+  downloadStartFrame.value = 0
+  downloadEndFrame.value = Math.max(0, frames.value.length - 1)
+  showDownloadDialog.value = true
+}
+
+const downloadFrames = async () => {
+  if (isDownloading.value) return
+  
+  const startFrame = Math.max(0, downloadStartFrame.value)
+  const endFrame = Math.min(downloadEndFrame.value, frames.value.length - 1)
+  
+  if (startFrame > endFrame) {
+    alert('開始フレームは終了フレームより小さい値を指定してください。')
+    return
+  }
+
+  isDownloading.value = true
+
+  try {
+    const s3Service = new S3Service(projectStore.bucketName!)
+    const framesToDownload = []
+    
+    // 指定範囲のフレームを取得
+    for (let i = startFrame; i <= endFrame; i++) {
+      const frame = frames.value.find(f => f.number === i)
+      if (frame?.taken && frame.filename) {
+        try {
+          const blob = await s3Service.downloadImage(projectStore.projectId!, i)
+          framesToDownload.push({
+            frameNumber: i,
+            blob,
+            filename: `frame_${i.toString().padStart(4, '0')}.webp`
+          })
+        } catch (err) {
+          console.warn(`Failed to download frame ${i}:`, err)
+        }
+      }
+    }
+
+    if (framesToDownload.length === 0) {
+      alert('ダウンロード可能なフレームがありません。')
+      return
+    }
+
+    // ZIPファイルを作成してダウンロード
+    await createAndDownloadZip(framesToDownload)
+    
+  } catch (err) {
+    console.error('Download failed:', err)
+    alert('ダウンロードに失敗しました。')
+  } finally {
+    isDownloading.value = false
+    showDownloadDialog.value = false
+  }
+}
+
+const createAndDownloadZip = async (frames: Array<{frameNumber: number, blob: Blob, filename: string}>) => {
+  // JSZipをインポート（動的インポート）
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
+
+  // フレームをZIPに追加
+  frames.forEach(frame => {
+    zip.file(frame.filename, frame.blob)
+  })
+
+  // ZIPファイルを生成
+  const zipBlob = await zip.generateAsync({ type: 'blob' })
+  
+  // ダウンロード
+  const url = URL.createObjectURL(zipBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `frames_${downloadStartFrame.value}-${downloadEndFrame.value}_${new Date().toISOString().slice(0, 10)}.zip`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// フレーム数変更機能
+const openFrameCountDialog = () => {
+  newFrameCount.value = frames.value.length
+  showFrameCountDialog.value = true
+}
+
+const updateProjectFrameCount = async () => {
+  if (isUpdatingFrameCount.value || newFrameCount.value <= 0 || newFrameCount.value > 1000) return
+
+  isUpdatingFrameCount.value = true
+
+  try {
+    // フレーム数を更新
+    projectStore.updateFrameCount(newFrameCount.value)
+
+    // S3の設定を更新
+    if (projectStore.bucketName && projectStore.projectId && projectStore.config) {
+      const s3Service = new S3Service(projectStore.bucketName)
+      await s3Service.uploadConfig(projectStore.projectId, projectStore.config)
+    }
+
+    showFrameCountDialog.value = false
+  } catch (err) {
+    console.error('Failed to update frame count:', err)
+    alert('フレーム数の更新に失敗しました。')
+  } finally {
+    isUpdatingFrameCount.value = false
+  }
+}
+
+const cancelDownload = () => {
+  showDownloadDialog.value = false
+}
+
+const cancelFrameCountUpdate = () => {
+  showFrameCountDialog.value = false
+}
+
+// プレビュー機能
+const openPreviewDialog = async () => {
+  previewFps.value = projectStore.config?.fps || 12
+  showPreviewDialog.value = true
+  await loadPreviewImages()
+}
+
+const loadPreviewImages = async () => {
+  if (!projectStore.bucketName || !projectStore.projectId) return
+  
+  isLoadingPreview.value = true
+  previewImages.value = []
+  
+  try {
+    const s3Service = new S3Service(projectStore.bucketName)
+    const takenFrames = frames.value.filter(frame => frame.taken && frame.filename).sort((a, b) => a.number - b.number)
+    
+    for (const frame of takenFrames) {
+      try {
+        // キャッシュから取得するか、新しく読み込み
+        let imageUrl = frameImageCache.value.get(frame.number)
+        if (!imageUrl) {
+          const blob = await s3Service.downloadImage(projectStore.projectId, frame.number)
+          imageUrl = URL.createObjectURL(blob)
+          frameImageCache.value.set(frame.number, imageUrl)
+        }
+        previewImages.value.push(imageUrl)
+      } catch (err) {
+        console.warn(`Failed to load preview image for frame ${frame.number}:`, err)
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load preview images:', err)
+  } finally {
+    isLoadingPreview.value = false
+  }
+}
+
+const startPreview = () => {
+  if (previewImages.value.length === 0) return
+  
+  isPlaying.value = true
+  currentPreviewFrame.value = 0
+  
+  const interval = 1000 / previewFps.value
+  const playInterval = setInterval(() => {
+    if (!isPlaying.value) {
+      clearInterval(playInterval)
+      return
+    }
+    
+    currentPreviewFrame.value = (currentPreviewFrame.value + 1) % previewImages.value.length
+  }, interval)
+}
+
+const stopPreview = () => {
+  isPlaying.value = false
+  currentPreviewFrame.value = 0
+}
+
+const closePreviewDialog = () => {
+  stopPreview()
+  showPreviewDialog.value = false
+  previewImages.value = []
+}
+
 // クリーンアップ処理
 const cleanup = () => {
   frameImageCache.value.forEach((url) => {
@@ -290,6 +495,29 @@ onUnmounted(() => {
         </div>
 
         <div class="toolbar-right">
+          <button class="tool-button" @click="openDownloadDialog">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            ダウンロード
+          </button>
+          <button class="tool-button" @click="openFrameCountDialog">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            フレーム数変更
+          </button>
+          <button class="tool-button" @click="openPreviewDialog">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5,3 19,12 5,21"/>
+            </svg>
+            プレビュー
+          </button>
           <button v-if="selectedFrames.size === 0" class="tool-button" @click="selectAllFrames">
             全選択
           </button>
@@ -492,6 +720,165 @@ onUnmounted(() => {
         <div class="delete-actions">
           <button class="cancel-button" @click="cancelDelete">キャンセル</button>
           <button class="confirm-button" @click="confirmDelete">削除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ダウンロードダイアログ -->
+    <div v-if="showDownloadDialog" class="modal-overlay" @click="cancelDownload">
+      <div class="modal-dialog" @click.stop>
+        <h3 class="modal-title">フレームをダウンロード</h3>
+        <p class="modal-description">
+          ダウンロードするフレームの範囲を指定してください。撮影済みのフレームのみがダウンロードされます。
+        </p>
+        <div class="form-group">
+          <label for="start-frame">開始フレーム:</label>
+          <input
+            id="start-frame"
+            v-model.number="downloadStartFrame"
+            type="number"
+            :min="0"
+            :max="frames.length - 1"
+            class="form-input"
+          />
+        </div>
+        <div class="form-group">
+          <label for="end-frame">終了フレーム:</label>
+          <input
+            id="end-frame"
+            v-model.number="downloadEndFrame"
+            type="number"
+            :min="downloadStartFrame"
+            :max="frames.length - 1"
+            class="form-input"
+          />
+        </div>
+        <div class="modal-actions">
+          <button class="cancel-button" @click="cancelDownload" :disabled="isDownloading">
+            キャンセル
+          </button>
+          <button class="confirm-button" @click="downloadFrames" :disabled="isDownloading">
+            {{ isDownloading ? 'ダウンロード中...' : 'ダウンロード' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- フレーム数変更ダイアログ -->
+    <div v-if="showFrameCountDialog" class="modal-overlay" @click="cancelFrameCountUpdate">
+      <div class="modal-dialog" @click.stop>
+        <h3 class="modal-title">フレーム数を変更</h3>
+        <p class="modal-description">
+          プロジェクトの総フレーム数を変更します。<br />
+          フレーム数を減らす場合、最後のフレームから削除されます。
+        </p>
+        <div class="form-group">
+          <label for="frame-count">新しいフレーム数:</label>
+          <input
+            id="frame-count"
+            v-model.number="newFrameCount"
+            type="number"
+            min="1"
+            max="1000"
+            class="form-input"
+          />
+        </div>
+        <div class="current-info">
+          現在のフレーム数: {{ frames.length }}
+        </div>
+        <div class="modal-actions">
+          <button class="cancel-button" @click="cancelFrameCountUpdate" :disabled="isUpdatingFrameCount">
+            キャンセル
+          </button>
+          <button class="confirm-button" @click="updateProjectFrameCount" :disabled="isUpdatingFrameCount">
+            {{ isUpdatingFrameCount ? '更新中...' : '更新' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- プレビューダイアログ -->
+    <div v-if="showPreviewDialog" class="preview-overlay" @click="closePreviewDialog">
+      <div class="preview-dialog" @click.stop>
+        <div class="preview-header">
+          <h3 class="preview-title">アニメーションプレビュー</h3>
+          <button class="preview-close" @click="closePreviewDialog" aria-label="プレビューを閉じる">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div v-if="isLoadingPreview" class="preview-loading">
+          <div class="loading-spinner"></div>
+          <p>プレビュー画像を読み込み中...</p>
+        </div>
+
+        <div v-else-if="previewImages.length === 0" class="preview-empty">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21,15 16,10 5,21"/>
+          </svg>
+          <p>プレビュー可能なフレームがありません</p>
+        </div>
+
+        <div v-else class="preview-content">
+          <div class="preview-player">
+            <div class="preview-image-container">
+              <img
+                v-if="previewImages[currentPreviewFrame]"
+                :src="previewImages[currentPreviewFrame]"
+                alt="Preview frame"
+                class="preview-image"
+              />
+              <div class="preview-frame-counter">
+                {{ currentPreviewFrame + 1 }} / {{ previewImages.length }}
+              </div>
+            </div>
+            
+            <div class="preview-controls">
+              <div class="preview-fps-control">
+                <label for="preview-fps">FPS:</label>
+                <input
+                  id="preview-fps"
+                  v-model.number="previewFps"
+                  type="range"
+                  min="1"
+                  max="30"
+                  class="fps-slider"
+                  :disabled="isPlaying"
+                />
+                <span class="fps-value">{{ previewFps }}</span>
+              </div>
+              
+              <div class="preview-buttons">
+                <button
+                  v-if="!isPlaying"
+                  @click="startPreview"
+                  class="preview-button play-button"
+                  :disabled="previewImages.length === 0"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5,3 19,12 5,21"/>
+                  </svg>
+                  再生
+                </button>
+                <button
+                  v-else
+                  @click="stopPreview"
+                  class="preview-button stop-button"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="4" width="4" height="16"/>
+                    <rect x="14" y="4" width="4" height="16"/>
+                  </svg>
+                  停止
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -998,6 +1385,89 @@ onUnmounted(() => {
   justify-content: center;
 }
 
+/* モーダルダイアログ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 450px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.modal-description {
+  color: #495057;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #495057;
+  font-weight: 500;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.current-info {
+  background: #f8f9fa;
+  padding: 0.75rem;
+  border-radius: 6px;
+  color: #495057;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
 .cancel-button,
 .confirm-button {
   padding: 0.75rem 1.5rem;
@@ -1015,17 +1485,269 @@ onUnmounted(() => {
   border: 1px solid #dee2e6;
 }
 
-.cancel-button:hover {
+.cancel-button:hover:not(:disabled) {
   background: #e9ecef;
 }
 
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .confirm-button {
-  background: #dc3545;
+  background: #007bff;
   color: white;
 }
 
-.confirm-button:hover {
+.confirm-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.confirm-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* 削除確認ダイアログの確認ボタンのみ赤色 */
+.delete-dialog .confirm-button {
+  background: #dc3545;
+}
+
+.delete-dialog .confirm-button:hover:not(:disabled) {
   background: #c82333;
+}
+
+/* プレビューダイアログスタイル */
+.preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  padding: 20px;
+}
+
+.preview-dialog {
+  background: white;
+  border-radius: 16px;
+  max-width: 90vw;
+  max-height: 90vh;
+  width: 800px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e1e5e9;
+  background: #f8f9fa;
+}
+
+.preview-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.preview-close {
+  background: none;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-close:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+.preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  color: #666;
+}
+
+.preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  color: #999;
+}
+
+.preview-empty svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.preview-content {
+  padding: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-player {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.preview-image-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  border-radius: 12px;
+  min-height: 300px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.preview-frame-counter {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.preview-fps-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.preview-fps-control label {
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+}
+
+.fps-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #e1e5e9;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.fps-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #007aff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.fps-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #007aff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.fps-value {
+  font-weight: 600;
+  color: #007aff;
+  min-width: 30px;
+  text-align: center;
+}
+
+.preview-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.preview-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.play-button {
+  background: #007aff;
+  color: white;
+}
+
+.play-button:hover:not(:disabled) {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.stop-button {
+  background: #ff3b30;
+  color: white;
+}
+
+.stop-button:hover {
+  background: #d70015;
+  transform: translateY(-1px);
+}
+
+.preview-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* モバイル対応 */
@@ -1044,6 +1766,7 @@ onUnmounted(() => {
   .toolbar-left,
   .toolbar-right {
     justify-content: center;
+    flex-wrap: wrap;
   }
 
   .frame-meta {
@@ -1051,8 +1774,50 @@ onUnmounted(() => {
     gap: 0.25rem;
   }
 
+  .modal-actions,
   .delete-actions {
     flex-direction: column;
+  }
+
+  .modal-dialog,
+  .delete-dialog {
+    margin: 1rem;
+    padding: 1.5rem;
+  }
+
+  .tool-button {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .tool-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* プレビューダイアログのモバイル対応 */
+  .preview-dialog {
+    width: 95vw;
+    max-height: 85vh;
+  }
+  
+  .preview-controls {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .preview-fps-control {
+    width: 100%;
+  }
+  
+  .preview-buttons {
+    justify-content: center;
+    width: 100%;
+  }
+  
+  .preview-button {
+    flex: 1;
+    justify-content: center;
   }
 }
 </style>

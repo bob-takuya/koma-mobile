@@ -30,12 +30,23 @@
         />
 
         <!-- カメラ初期化中のローディング -->
-        <div v-if="showCamera && !getCurrentFrameData?.taken && isCameraInitializing" class="camera-loading">
+        <div
+          v-if="showCamera && !getCurrentFrameData?.taken && isCameraInitializing"
+          class="camera-loading"
+        >
           <p>カメラを初期化中...</p>
         </div>
-        
+
         <!-- その他の状態（フォールバック） -->
-        <div v-if="showCamera && !getCurrentFrameData?.taken && !isCameraInitializing && !videoElement?.srcObject" class="camera-loading">
+        <div
+          v-if="
+            showCamera &&
+            !getCurrentFrameData?.taken &&
+            !isCameraInitializing &&
+            !videoElement?.srcObject
+          "
+          class="camera-loading"
+        >
           <p>カメラの準備中...</p>
         </div>
 
@@ -148,6 +159,31 @@
         </div>
       </div>
     </div>
+
+    <!-- Side Navigation Arrows -->
+    <!-- Previous Frame Arrow (Left side) -->
+    <button
+      data-testid="prev-frame-arrow"
+      class="side-nav-arrow left-arrow"
+      :disabled="currentFrame <= 0"
+      @click="previousFrame"
+    >
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15,18 9,12 15,6"></polyline>
+      </svg>
+    </button>
+
+    <!-- Next Frame Arrow (Right side) -->
+    <button
+      data-testid="next-frame-arrow"
+      class="side-nav-arrow right-arrow"
+      :disabled="currentFrame >= totalFrames - 1"
+      @click="nextFrame"
+    >
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9,18 15,12 9,6"></polyline>
+      </svg>
+    </button>
 
     <!-- Note Overlay -->
     <div
@@ -275,6 +311,18 @@ const handleFrameChange = (event: Event) => {
   projectStore.setCurrentFrame(parseInt(target.value))
 }
 
+const previousFrame = () => {
+  if (currentFrame.value > 0) {
+    projectStore.setCurrentFrame(currentFrame.value - 1)
+  }
+}
+
+const nextFrame = () => {
+  if (currentFrame.value < totalFrames.value - 1) {
+    projectStore.setCurrentFrame(currentFrame.value + 1)
+  }
+}
+
 const initializeCamera = async () => {
   console.log('initializeCamera called, video element available:', !!videoElement.value)
 
@@ -289,10 +337,12 @@ const initializeCamera = async () => {
     // videoElementの存在を確認し、必要なら待機
     let videoElementRetries = 0
     const maxVideoRetries = 20
-    
+
     while (!videoElement.value && videoElementRetries < maxVideoRetries) {
-      console.log(`Waiting for video element, attempt ${videoElementRetries + 1}/${maxVideoRetries}`)
-      await new Promise(resolve => setTimeout(resolve, 50))
+      console.log(
+        `Waiting for video element, attempt ${videoElementRetries + 1}/${maxVideoRetries}`,
+      )
+      await new Promise((resolve) => setTimeout(resolve, 50))
       await nextTick()
       videoElementRetries++
     }
@@ -617,9 +667,12 @@ const loadFrameImage = async (frameNumber: number) => {
 const loadingOnionSkinImages = ref<Set<number>>(new Set())
 
 const loadFrameImageForOnionSkin = async (frameNumber: number) => {
-  if (!projectStore.bucketName || !projectStore.projectId || 
-      frameImageCache.value.has(frameNumber) || 
-      loadingOnionSkinImages.value.has(frameNumber)) {
+  if (
+    !projectStore.bucketName ||
+    !projectStore.projectId ||
+    frameImageCache.value.has(frameNumber) ||
+    loadingOnionSkinImages.value.has(frameNumber)
+  ) {
     return
   }
 
@@ -645,7 +698,7 @@ const preloadOnionSkinImages = async (currentFrameIdx: number) => {
   }
 
   const promises = []
-  
+
   // 前のフレームを事前に読み込み
   for (let i = 1; i <= onionSkinFrames.value; i++) {
     const frameIdx = currentFrameIdx - i
@@ -691,7 +744,7 @@ watch(currentFrame, async (newFrame, oldFrame) => {
 
         // DOM更新を待つ
         await nextTick()
-        
+
         // カメラ初期化の重複を防ぐ
         if (!isCameraInitializing.value) {
           try {
@@ -751,7 +804,7 @@ onMounted(async () => {
 
   if (!frameData?.taken) {
     console.log('Frame not taken, initializing camera')
-    
+
     try {
       await initializeCamera()
     } catch (err) {
@@ -771,24 +824,24 @@ onMounted(async () => {
 
 onUnmounted(() => {
   console.log('CameraInterface unmounting, cleaning up resources')
-  
+
   // カメラ初期化フラグをリセット
   isCameraInitializing.value = false
-  
+
   // カメラを停止
   cameraService.stopCamera()
-  
+
   // videoElementのストリームも確実に停止
   if (videoElement.value?.srcObject) {
     const tracks = (videoElement.value.srcObject as MediaStream).getTracks()
     tracks.forEach((track) => track.stop())
     videoElement.value.srcObject = null
   }
-  
+
   // Clean up blob URLs
   frameImageCache.value.forEach((url) => URL.revokeObjectURL(url))
   frameImageCache.value.clear()
-  
+
   console.log('CameraInterface cleanup completed')
 })
 </script>
@@ -1085,6 +1138,51 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Side Navigation Arrows */
+.side-nav-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  width: 60px;
+  height: 80px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.side-nav-arrow:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.8);
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+}
+
+.side-nav-arrow:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.side-nav-arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.left-arrow {
+  left: 16px;
+}
+
+.right-arrow {
+  right: 16px;
+}
+
 @media (max-height: 600px) {
   .bottom-panel {
     bottom: 1rem;
@@ -1169,6 +1267,25 @@ onUnmounted(() => {
 
   .view-frame-button span {
     font-size: 14px;
+  }
+
+  /* モバイルでの側面矢印の調整 */
+  .side-nav-arrow {
+    width: 50px;
+    height: 70px;
+  }
+
+  .left-arrow {
+    left: 8px;
+  }
+
+  .right-arrow {
+    right: 8px;
+  }
+
+  .side-nav-arrow svg {
+    width: 28px;
+    height: 28px;
   }
 }
 

@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "^3.830.0",
+    "jszip": "^3.10.1",
     "node-fetch": "^3.3.2",
     "pinia": "^3.0.3",
     "vue": "^3.5.13",
@@ -31,6 +32,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/vue": "^8.1.0",
     "@tsconfig/node22": "^22.0.1",
+    "@types/jszip": "^3.4.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/eslint-config-prettier": "^10.2.0",
